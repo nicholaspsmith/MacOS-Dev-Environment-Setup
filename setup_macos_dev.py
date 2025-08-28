@@ -129,16 +129,128 @@ class MacOSDevSetup:
             self.add_success("Python installed (alias setup failed)")
             return True
     
-    def install_node(self):
-        """Install Node.js via Homebrew"""
-        print("📦 Installing Node.js...")
-        result = self.run_command('brew install node')
-        if result:
-            self.add_success("Node.js installed")
+    def install_oh_my_zsh(self):
+        """Install Oh My Zsh"""
+        print("📦 Installing Oh My Zsh...")
+        
+        # Check if already installed
+        oh_my_zsh_dir = Path.home() / '.oh-my-zsh'
+        if oh_my_zsh_dir.exists():
+            self.add_success("Oh My Zsh already installed")
+            return True
+        
+        # Install Oh My Zsh
+        install_cmd = 'sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
+        result = self.run_command(install_cmd, shell=True, capture_output=False)
+        
+        if result and oh_my_zsh_dir.exists():
+            self.add_success("Oh My Zsh installed")
             return True
         else:
-            self.add_failure("Node.js installation failed")
+            self.add_failure("Oh My Zsh installation failed")
             return False
+    
+    def install_nvm(self):
+        """Install NVM (Node Version Manager)"""
+        print("📦 Installing NVM (Node Version Manager)...")
+        
+        # Check if NVM is already installed
+        nvm_dir = Path.home() / '.nvm'
+        if nvm_dir.exists():
+            self.add_success("NVM already installed")
+            return self.setup_nvm_and_node()
+        
+        # Install NVM
+        install_cmd = 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
+        result = self.run_command(install_cmd, shell=True, capture_output=False)
+        
+        if result:
+            self.add_success("NVM installed")
+            return self.setup_nvm_and_node()
+        else:
+            self.add_failure("NVM installation failed")
+            return False
+    
+    def setup_nvm_and_node(self):
+        """Setup NVM environment and install Node.js LTS"""
+        print("⚙️ Setting up NVM and installing Node.js LTS...")
+        
+        try:
+            # Add NVM to current session
+            nvm_dir = str(Path.home() / '.nvm')
+            nvm_script = f'{nvm_dir}/nvm.sh'
+            
+            if not os.path.exists(nvm_script):
+                self.add_failure("NVM script not found after installation")
+                return False
+            
+            # Ensure NVM is added to shell profile (NVM installer should do this, but let's be sure)
+            self.ensure_nvm_in_profile(nvm_dir)
+            
+            # Source NVM and install Node LTS
+            setup_commands = [
+                f'export NVM_DIR="{nvm_dir}"',
+                f'[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"',
+                'nvm install --lts',
+                'nvm use --lts',
+                'nvm alias default lts/*'
+            ]
+            
+            combined_cmd = ' && '.join(setup_commands)
+            result = self.run_command(combined_cmd, shell=True, capture_output=False)
+            
+            if result:
+                # Verify Node.js is available
+                node_check = self.run_command('bash -c "source ~/.nvm/nvm.sh && node --version"', shell=True)
+                if node_check:
+                    self.add_success(f"Node.js LTS installed via NVM")
+                    return True
+            
+            # If the above failed, try a simpler approach
+            print("Trying alternative NVM setup...")
+            fallback_cmd = f'bash -c "export NVM_DIR={nvm_dir} && source {nvm_script} && nvm install --lts && nvm use --lts"'
+            fallback_result = self.run_command(fallback_cmd, shell=True, capture_output=False)
+            
+            if fallback_result:
+                self.add_success("Node.js LTS installed via NVM (fallback method)")
+                return True
+            
+            self.add_failure("Node.js installation via NVM failed")
+            return False
+            
+        except Exception as e:
+            print(f"Error setting up NVM: {e}")
+            self.add_failure(f"NVM setup failed: {e}")
+            return False
+    
+    def ensure_nvm_in_profile(self, nvm_dir):
+        """Ensure NVM is properly configured in shell profile"""
+        nvm_lines = [
+            f'export NVM_DIR="{nvm_dir}"',
+            '[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"  # This loads nvm',
+            '[ -s "$NVM_DIR/bash_completion" ] && \\. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion'
+        ]
+        
+        try:
+            existing_content = ""
+            if self.shell_profile.exists():
+                with open(self.shell_profile, 'r') as f:
+                    existing_content = f.read()
+            
+            lines_to_add = []
+            for line in nvm_lines:
+                if line not in existing_content and 'NVM_DIR' not in existing_content:
+                    lines_to_add.append(line)
+            
+            if lines_to_add:
+                with open(self.shell_profile, 'a') as f:
+                    f.write('\n# NVM Configuration\n')
+                    f.write('\n'.join(lines_to_add))
+                    f.write('\n')
+                print("Added NVM configuration to shell profile")
+                
+        except Exception as e:
+            print(f"Warning: Could not update shell profile for NVM: {e}")
     
     def install_iterm(self):
         """Install iTerm2 via Homebrew"""
@@ -469,14 +581,16 @@ class MacOSDevSetup:
         print("\n📋 Next Steps:")
         print("1. Restart your terminal to ensure all PATH changes take effect")
         print("2. Open iTerm2 and test the hotkey: Ctrl+Q")
-        print("3. Open VS Code and configure Claude Code extension")
-        print("4. Run 'claude' in your project directory to start Claude Code")
-        print("5. Test GitHub CLI with: gh auth status")
+        print("3. Check your new Oh My Zsh-powered terminal!")
+        print("4. Open VS Code and configure Claude Code extension")
+        print("5. Run 'claude' in your project directory to start Claude Code")
+        print("6. Test GitHub CLI with: gh auth status")
         
         print("\n🔧 Manual Configuration Required:")
         print("• iTerm2: Go to Settings > Keys > Hotkey to fine-tune hotkey window")
         print("• VS Code: Configure Claude Code extension with your API key")
         print("• Python: Run 'source ~/.zshrc' to activate the python alias")
+        print("• Oh My Zsh: Customize themes and plugins in ~/.zshrc")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
             print("  sudo ln -sf '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code' /usr/local/bin/code")
@@ -487,6 +601,10 @@ class MacOSDevSetup:
         print("• gh status              - Check GitHub CLI status")
         print("• python --version       - Check Python version")
         print("• node --version         - Check Node.js version")
+        print("• nvm --version          - Check NVM version")
+        print("• nvm list               - List installed Node.js versions")
+        print("• nvm install <version>  - Install specific Node.js version")
+        print("• nvm use <version>      - Switch to Node.js version")
         print("• code --list-extensions - List installed VS Code extensions")
     
     def setup_all(self):
@@ -494,9 +612,9 @@ class MacOSDevSetup:
         print("🚀 macOS Development Environment Setup")
         print("="*50)
         print("This will install and configure:")
-        print("• Homebrew, Python, Node.js")
+        print("• Homebrew, Python, NVM & Node.js LTS")
         print("• iTerm2 with custom hotkey profile")  
-        print("• ZSH shell")
+        print("• ZSH shell with Oh My Zsh")
         print("• Claude Code")
         print("• VS Code with extensions")
         print("• GitHub CLI with authentication")
@@ -509,7 +627,6 @@ class MacOSDevSetup:
         
         # Check compatibility
         if not self.check_macos_compatibility():
-            print("Setup cancelled. OS version not compatible.")
             return False
         
         print(f"\n🔧 Starting setup process...")
@@ -518,10 +635,11 @@ class MacOSDevSetup:
         steps = [
             ("Installing Homebrew", self.install_homebrew),
             ("Installing Python", self.install_python_via_homebrew),
-            ("Installing Node.js", self.install_node),
+            ("Setting up ZSH", self.install_zsh),
+            ("Installing Oh My Zsh", self.install_oh_my_zsh),
+            ("Installing NVM & Node.js", self.install_nvm),
             ("Installing iTerm2", self.install_iterm),
             ("Configuring iTerm profile", self.setup_iterm_profile),
-            ("Setting up ZSH", self.install_zsh),
             ("Installing Claude Code", self.install_claude_code),
             ("Installing/Checking VS Code", self.install_vscode),
             ("Configuring VS Code extensions", self.configure_vscode_extensions),
