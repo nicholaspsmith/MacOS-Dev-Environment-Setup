@@ -1,0 +1,21 @@
+# Install homebrew
+# Install python
+## set alias 'python' to point to python script installed by homebrew
+# Install node
+# Install iTerm
+# Set up custom iTerm profile
+## enable: Show/hide all windows with a system-wide hotkey
+## Create a Dedicated Hotkey "^q"
+## set opacity 10%
+## enable: Animate showing and hiding
+# Install ZSH
+# Install Claude Code
+# Install VSCode
+## Install 'code' command in PATH
+## Uninstall GitHub Copilot and Github Copilot Chat
+## Install Claude Code for VSCode
+## Install Python
+# Install Github CLI
+## Prompt user to sign into github cli
+## Open a browser tab to github.com sign in page
+
