@@ -149,6 +149,34 @@ class MacOSDevSetup:
         else:
             self.add_failure("Oh My Zsh installation failed")
             return False
+        
+    def copy_zshrc(self):
+        """Copy .zshrc from local zsh directory to user's home directory"""
+        source_zshrc = Path(__file__).parent / 'zsh' / '.zshrc'
+        dest_zshrc = Path.home() / '.zshrc'
+        
+        try:
+            # Check if source file exists
+            if not source_zshrc.exists():
+                self.add_failure(f".zshrc file not found at {source_zshrc}")
+                return False
+            
+            # Backup existing .zshrc if it exists
+            if dest_zshrc.exists():
+                backup_path = dest_zshrc.with_suffix('.zshrc.backup')
+                shutil.copy2(dest_zshrc, backup_path)
+                print(f"Backed up existing .zshrc to {backup_path}")
+            
+            # Copy the new .zshrc
+            shutil.copy2(source_zshrc, dest_zshrc)
+            self.add_success(f".zshrc copied to {dest_zshrc}")
+            return True
+            
+        except Exception as e:
+            self.add_failure(f"Failed to copy .zshrc: {e}")
+            return False
+
+
     
     def install_nvm(self):
         """Install NVM (Node Version Manager)"""
@@ -261,53 +289,6 @@ class MacOSDevSetup:
             return True
         else:
             self.add_failure("iTerm2 installation failed")
-            return False
-    
-    def setup_iterm_profile(self):
-        """Set up custom iTerm profile with hotkey window"""
-        print("⚙️ Setting up iTerm profile...")
-        
-        try:
-            # Path to iTerm2 preferences
-            plist_path = Path.home() / 'Library' / 'Preferences' / 'com.googlecode.iterm2.plist'
-            
-            # Create a basic configuration for iTerm2
-            iterm_config = {
-                'HotkeyMigratedFromSingleToMulti': True,
-                'GlobalKeyMap': {},
-                'HotKeyBookmarks': [
-                    {
-                        'Bookmark Name': 'HotkeyWindow',
-                        'Guid': 'HOTKEY-WINDOW-GUID',
-                        'Window Type': 1,  # Hotkey window
-                        'Hotkey Activated By Modifier': False,
-                        'Hotkey Key Code': 12,  # Q key
-                        'Hotkey Modifier Flags': 262144,  # Control key
-                        'Hotkey Window Floats': True,
-                        'Transparency': 0.9,  # 10% opacity means 90% transparency
-                        'Blur': True,
-                        'Hotkey Window AutoHides': True,
-                        'Hotkey Window Animates': True,
-                        'Initial Text': '',
-                        'Custom Directory': 'No',
-                        'Working Directory': '/Users/' + os.getlogin(),
-                    }
-                ],
-                'ShowFullScreenTabBar': False,
-                'UseBorder': False,
-                'HideScrollbar': True,
-            }
-            
-            # Write the configuration
-            with open(plist_path, 'wb') as f:
-                plistlib.dump(iterm_config, f)
-            
-            self.add_success("iTerm profile configured (restart iTerm to apply changes)")
-            return True
-            
-        except Exception as e:
-            print(f"Warning: Could not configure iTerm profile: {e}")
-            self.add_failure("iTerm profile configuration failed")
             return False
     
     def install_zsh(self):
@@ -464,25 +445,6 @@ class MacOSDevSetup:
         extensions_success = []
         extensions_failed = []
         
-        # Uninstall GitHub Copilot extensions
-        copilot_extensions = [
-            'github.copilot',
-            'github.copilot-chat'
-        ]
-        
-        print("🗑️ Removing GitHub Copilot extensions...")
-        for ext in copilot_extensions:
-            result = self.run_command(f'code --uninstall-extension {ext}')
-            if result:
-                extensions_success.append(f"Uninstalled {ext}")
-            else:
-                # Check if extension was actually installed
-                list_result = self.run_command('code --list-extensions')
-                if list_result and ext in list_result.stdout:
-                    extensions_failed.append(f"Failed to uninstall {ext}")
-                else:
-                    extensions_success.append(f"{ext} (not installed)")
-        
         # Install desired extensions
         desired_extensions = [
             ('anthropic.claude-code', 'Claude Code for VS Code'),
@@ -589,7 +551,7 @@ class MacOSDevSetup:
         print("\n🔧 Manual Configuration Required:")
         print("• iTerm2: Go to Settings > Keys > Hotkey to fine-tune hotkey window")
         print("• VS Code: Configure Claude Code extension with your API key")
-        print("• Python: Run 'source ~/.zshrc' to activate the python alias")
+        print("• Python: Run 'source ~/.zshrc' to use new shell configuration")
         print("• Oh My Zsh: Customize themes and plugins in ~/.zshrc")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
@@ -637,9 +599,9 @@ class MacOSDevSetup:
             ("Installing Python", self.install_python_via_homebrew),
             ("Setting up ZSH", self.install_zsh),
             ("Installing Oh My Zsh", self.install_oh_my_zsh),
+            ("Copying zsh config to ~/.zshrc", self.copy_zshrc),
             ("Installing NVM & Node.js", self.install_nvm),
             ("Installing iTerm2", self.install_iterm),
-            ("Configuring iTerm profile", self.setup_iterm_profile),
             ("Installing Claude Code", self.install_claude_code),
             ("Installing/Checking VS Code", self.install_vscode),
             ("Configuring VS Code extensions", self.configure_vscode_extensions),
