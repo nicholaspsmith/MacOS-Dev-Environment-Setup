@@ -13,6 +13,8 @@ import json
 import webbrowser
 import time
 import plistlib
+import curses
+import argparse
 from pathlib import Path
 
 class MacOSDevSetup:
@@ -428,6 +430,81 @@ class MacOSDevSetup:
             print(f"Warning: Could not update shell profile: {e}")
         return False
     
+    def setup_kill_apple_media_tracking(self):
+        """Setup script to kill Apple media tracking processes"""
+        print("⚙️ Setting up Apple media tracking killer script...")
+        
+        try:
+            # Source and destination paths
+            source_script = Path(__file__).parent / 'killapplemediatracking.sh'
+            dest_script = Path.home() / '.killapplemediatracking.sh'
+            launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
+            plist_file = launch_agents_dir / 'com.user.killapplemediatracking.plist'
+            
+            # Check if source script exists
+            if not source_script.exists():
+                self.add_failure("killapplemediatracking.sh not found in project directory")
+                return False
+            
+            # Copy the script to user's home directory (hidden)
+            shutil.copy2(source_script, dest_script)
+            # Make it executable
+            os.chmod(dest_script, 0o755)
+            print(f"Copied script to {dest_script}")
+            
+            # Create LaunchAgents directory if it doesn't exist
+            launch_agents_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create the LaunchAgent plist file
+            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.killapplemediatracking</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{dest_script}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/killapplemediatracking.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/killapplemediatracking.error.log</string>
+</dict>
+</plist>"""
+            
+            # Write the plist file
+            with open(plist_file, 'w') as f:
+                f.write(plist_content)
+            
+            print(f"Created LaunchAgent at {plist_file}")
+            
+            # Load the LaunchAgent
+            load_result = self.run_command(f'launchctl load {plist_file}', check=False)
+            
+            # Check if it's already loaded (which would cause an error)
+            if load_result is None or (load_result and 'already loaded' in load_result.stderr.lower()):
+                # Try unloading first then loading again
+                self.run_command(f'launchctl unload {plist_file}', check=False)
+                load_result = self.run_command(f'launchctl load {plist_file}')
+            
+            if load_result:
+                self.add_success("Apple media tracking killer script installed and started")
+                print("The script will run continuously in the background and restart on login")
+                return True
+            else:
+                self.add_success("Apple media tracking killer script installed (will start on next login)")
+                print("Note: Run 'launchctl load ~/Library/LaunchAgents/com.user.killapplemediatracking.plist' to start now")
+                return True
+                
+        except Exception as e:
+            self.add_failure(f"Failed to setup Apple media tracking killer: {e}")
+            return False
+    
     def configure_vscode_extensions(self):
         """Configure VS Code extensions"""
         print("⚙️ Configuring VS Code extensions...")
@@ -568,18 +645,195 @@ class MacOSDevSetup:
         print("• nvm install <version>  - Install specific Node.js version")
         print("• nvm use <version>      - Switch to Node.js version")
         print("• code --list-extensions - List installed VS Code extensions")
+        print("• launchctl list | grep killapplemediatracking - Check media killer status")
+        print("• launchctl unload ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Stop media killer")
+        print("• launchctl load ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Start media killer")
+    
+    def get_installation_steps(self):
+        """Get all available installation steps"""
+        return [
+            ("Homebrew", "Package manager for macOS", self.install_homebrew),
+            ("Python via Homebrew", "Python development environment", self.install_python_via_homebrew),
+            ("ZSH Shell", "Z Shell (should already be default)", self.install_zsh),
+            ("Oh My Zsh", "ZSH framework for terminal customization", self.install_oh_my_zsh),
+            ("Copy .zshrc config", "Custom ZSH configuration file", self.copy_zshrc),
+            ("NVM & Node.js LTS", "Node Version Manager and Node.js", self.install_nvm),
+            ("iTerm2", "Enhanced terminal emulator", self.install_iterm),
+            ("Claude Code", "Claude AI coding assistant", self.install_claude_code),
+            ("VS Code", "Visual Studio Code editor", self.install_vscode),
+            ("VS Code Extensions", "Claude Code and Python extensions", self.configure_vscode_extensions),
+            ("GitHub CLI", "GitHub command line tool", self.install_github_cli),
+            ("GitHub Authentication", "Sign in to GitHub CLI", self.setup_github_cli),
+            ("Apple Media Tracking Killer", "Background process to disable media tracking", self.setup_kill_apple_media_tracking),
+        ]
+    
+    def display_checkbox_menu(self):
+        """Display an interactive checkbox menu for selecting installation steps"""
+        # Check if we're in an interactive terminal
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            print("Non-interactive environment detected, using simple menu...")
+            return self.display_simple_menu()
+        
+        steps = self.get_installation_steps()
+        selected = [True] * len(steps)  # Default all selected
+        
+        def draw_menu(stdscr, current_pos=0):
+            curses.curs_set(0)  # Hide cursor
+            stdscr.clear()
+            height, width = stdscr.getmaxyx()
+            
+            # Title
+            title = "🚀 macOS Development Environment Setup"
+            subtitle = "Use arrow keys to navigate, SPACE to toggle, ENTER to proceed, Q to quit"
+            
+            try:
+                stdscr.addstr(0, 0, title[:width-1], curses.A_BOLD)
+                stdscr.addstr(1, 0, "="*min(50, width-1))
+                stdscr.addstr(2, 0, subtitle[:width-1])
+                stdscr.addstr(3, 0, "-"*min(50, width-1))
+                
+                # Menu items
+                for idx, (name, description, _) in enumerate(steps):
+                    y = idx + 5
+                    if y >= height - 2:
+                        break
+                        
+                    checkbox = "[✓]" if selected[idx] else "[ ]"
+                    line = f"{checkbox} {name}"
+                    
+                    if idx == current_pos:
+                        stdscr.addstr(y, 0, line[:width-1], curses.A_REVERSE)
+                        # Show description on the line below when selected
+                        if y + 1 < height - 2:
+                            desc_line = f"    → {description}"
+                            stdscr.addstr(y + 1, 0, desc_line[:width-1], curses.A_DIM)
+                    else:
+                        stdscr.addstr(y, 0, line[:width-1])
+                
+                # Footer
+                footer_y = min(len(steps) + 7, height - 2)
+                stdscr.addstr(footer_y, 0, "-"*min(50, width-1))
+                footer_text = "Commands: ↑↓ Navigate | SPACE Toggle | A Select All | N Select None | ENTER Run | Q Quit"
+                stdscr.addstr(footer_y + 1, 0, footer_text[:width-1])
+            except curses.error:
+                pass  # Ignore curses errors for small terminals
+            
+            stdscr.refresh()
+        
+        def curses_menu(stdscr):
+            nonlocal selected
+            current = 0
+            
+            while True:
+                draw_menu(stdscr, current)
+                key = stdscr.getch()
+                
+                if key == curses.KEY_UP and current > 0:
+                    current -= 1
+                elif key == curses.KEY_DOWN and current < len(steps) - 1:
+                    current += 1
+                elif key == ord(' '):  # Space to toggle
+                    selected[current] = not selected[current]
+                elif key == ord('a') or key == ord('A'):  # Select all
+                    selected = [True] * len(steps)
+                elif key == ord('n') or key == ord('N'):  # Select none
+                    selected = [False] * len(steps)
+                elif key == ord('\n') or key == ord('\r'):  # Enter to proceed
+                    return True
+                elif key == ord('q') or key == ord('Q'):  # Q to quit
+                    return False
+        
+        # Use curses wrapper for the menu
+        try:
+            proceed = curses.wrapper(curses_menu)
+        except Exception:
+            # Fallback to simple text menu if curses fails
+            return self.display_simple_menu()
+        
+        if not proceed:
+            return None
+        
+        # Return selected steps
+        selected_steps = [(name, func) for (name, _, func), is_selected in zip(steps, selected) if is_selected]
+        return selected_steps
+    
+    def display_simple_menu(self):
+        """Fallback simple text-based menu"""
+        print("\n🚀 macOS Development Environment Setup")
+        print("="*50)
+        print("\nSelect which components to install:")
+        print("Enter the numbers separated by commas (e.g., 1,3,5)")
+        print("Or type: 'all' for everything, 'none' for interactive selection only, 'q' to quit\n")
+        
+        steps = self.get_installation_steps()
+        for idx, (name, description, _) in enumerate(steps, 1):
+            print(f"{idx:2}. {name}")
+            print(f"    → {description}")
+        
+        while True:
+            try:
+                print("\nYour selection: ", end="", flush=True)
+                selection = input().strip().lower()
+                
+                if selection == 'q':
+                    return None
+                elif selection == 'all' or selection == '':
+                    return [(name, func) for name, _, func in steps]
+                elif selection == 'none':
+                    return []
+                else:
+                    indices = [int(x.strip()) - 1 for x in selection.split(',') if x.strip()]
+                    selected_steps = []
+                    invalid_indices = []
+                    
+                    for idx in indices:
+                        if 0 <= idx < len(steps):
+                            name, _, func = steps[idx]
+                            selected_steps.append((name, func))
+                        else:
+                            invalid_indices.append(idx + 1)
+                    
+                    if invalid_indices:
+                        print(f"\n⚠️  Invalid selection(s): {', '.join(map(str, invalid_indices))}")
+                        print("Please enter valid numbers between 1 and", len(steps))
+                        continue
+                    
+                    if selected_steps:
+                        return selected_steps
+                    else:
+                        print("\n⚠️  No valid selections made. Please try again.")
+                        continue
+                        
+            except ValueError:
+                print("\n⚠️  Invalid input. Please enter numbers separated by commas, 'all', 'none', or 'q'.")
+                continue
+            except KeyboardInterrupt:
+                print("\n\nSetup cancelled.")
+                return None
+            except EOFError:
+                print("\n\nNo input received. Using default (all components).")
+                return [(name, func) for name, _, func in steps]
     
     def setup_all(self):
-        """Run the complete setup process"""
-        print("🚀 macOS Development Environment Setup")
+        """Legacy method for backwards compatibility"""
+        # This method is kept for backwards compatibility
+        # The main logic has been moved to main() function
+        selected_steps = self.display_checkbox_menu()
+        
+        if selected_steps is None:
+            print("\nSetup cancelled.")
+            return False
+        
+        if not selected_steps:
+            print("\nNo components selected for installation.")
+            return False
+        
+        # Display what will be installed
+        print("\n🚀 macOS Development Environment Setup")
         print("="*50)
-        print("This will install and configure:")
-        print("• Homebrew, Python, NVM & Node.js LTS")
-        print("• iTerm2 with custom hotkey profile")  
-        print("• ZSH shell with Oh My Zsh")
-        print("• Claude Code")
-        print("• VS Code with extensions")
-        print("• GitHub CLI with authentication")
+        print("\nThe following components will be installed:")
+        for name, _ in selected_steps:
+            print(f"  • {name}")
         
         # Confirm with user
         confirm = input("\nProceed with installation? (y/n): ").lower().strip()
@@ -593,24 +847,9 @@ class MacOSDevSetup:
         
         print(f"\n🔧 Starting setup process...")
         
-        # Run all installation steps
-        steps = [
-            ("Installing Homebrew", self.install_homebrew),
-            ("Installing Python", self.install_python_via_homebrew),
-            ("Setting up ZSH", self.install_zsh),
-            ("Installing Oh My Zsh", self.install_oh_my_zsh),
-            ("Copying zsh config to ~/.zshrc", self.copy_zshrc),
-            ("Installing NVM & Node.js", self.install_nvm),
-            ("Installing iTerm2", self.install_iterm),
-            ("Installing Claude Code", self.install_claude_code),
-            ("Installing/Checking VS Code", self.install_vscode),
-            ("Configuring VS Code extensions", self.configure_vscode_extensions),
-            ("Installing GitHub CLI", self.install_github_cli),
-            ("Setting up GitHub authentication", self.setup_github_cli),
-        ]
-        
-        for step_name, step_func in steps:
-            print(f"\n🔄 {step_name}...")
+        # Run selected installation steps
+        for step_name, step_func in selected_steps:
+            print(f"\n🔄 Installing {step_name}...")
             try:
                 step_func()
             except Exception as e:
@@ -623,9 +862,104 @@ class MacOSDevSetup:
         return len(self.failed_items) == 0
 
 def main():
-    setup = MacOSDevSetup()
-    success = setup.setup_all()
+    parser = argparse.ArgumentParser(
+        description='macOS Development Environment Setup',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python3 setup_macos_dev.py              # Interactive mode (default)
+  python3 setup_macos_dev.py --all        # Install everything
+  python3 setup_macos_dev.py --list       # List all available components
+  python3 setup_macos_dev.py --select 1,3,5  # Install specific components
+        """)
     
+    parser.add_argument('--all', '-a', action='store_true',
+                        help='Install all components without interactive menu')
+    parser.add_argument('--list', '-l', action='store_true',
+                        help='List all available components and exit')
+    parser.add_argument('--select', '-s', type=str,
+                        help='Select specific components by number (e.g., "1,3,5")')
+    parser.add_argument('--no-confirm', action='store_true',
+                        help='Skip confirmation prompt')
+    
+    args = parser.parse_args()
+    setup = MacOSDevSetup()
+    
+    # Handle --list option
+    if args.list:
+        print("\n🚀 Available Installation Components:")
+        print("="*50)
+        steps = setup.get_installation_steps()
+        for idx, (name, description, _) in enumerate(steps, 1):
+            print(f"{idx:2}. {name}")
+            print(f"    → {description}")
+        print()
+        return
+    
+    # Handle --all option
+    if args.all:
+        steps = setup.get_installation_steps()
+        selected_steps = [(name, func) for name, _, func in steps]
+    # Handle --select option
+    elif args.select:
+        try:
+            steps = setup.get_installation_steps()
+            indices = [int(x.strip()) - 1 for x in args.select.split(',')]
+            selected_steps = []
+            for idx in indices:
+                if 0 <= idx < len(steps):
+                    name, _, func = steps[idx]
+                    selected_steps.append((name, func))
+                else:
+                    print(f"❌ Invalid component number: {idx + 1}")
+                    sys.exit(1)
+        except ValueError:
+            print("❌ Invalid selection format. Use numbers separated by commas (e.g., 1,3,5)")
+            sys.exit(1)
+    # Interactive mode (default)
+    else:
+        selected_steps = setup.display_checkbox_menu()
+        if selected_steps is None:
+            print("\nSetup cancelled.")
+            return
+    
+    if not selected_steps:
+        print("\nNo components selected for installation.")
+        return
+    
+    # Display what will be installed
+    print("\n🚀 macOS Development Environment Setup")
+    print("="*50)
+    print("\nThe following components will be installed:")
+    for name, _ in selected_steps:
+        print(f"  • {name}")
+    
+    # Confirm with user (unless --no-confirm is used)
+    if not args.no_confirm:
+        confirm = input("\nProceed with installation? (y/n): ").lower().strip()
+        if confirm not in ['y', 'yes']:
+            print("Setup cancelled.")
+            return
+    
+    # Check compatibility
+    if not setup.check_macos_compatibility():
+        sys.exit(1)
+    
+    print(f"\n🔧 Starting setup process...")
+    
+    # Run selected installation steps
+    for step_name, step_func in selected_steps:
+        print(f"\n🔄 Installing {step_name}...")
+        try:
+            step_func()
+        except Exception as e:
+            print(f"❌ Error in {step_name}: {e}")
+            setup.add_failure(f"{step_name} (error: {e})")
+    
+    # Print summary
+    setup.print_summary()
+    
+    success = len(setup.failed_items) == 0
     if not success:
         print(f"\n⚠️  Setup completed with {len(setup.failed_items)} issues.")
         print("Check the summary above for details.")

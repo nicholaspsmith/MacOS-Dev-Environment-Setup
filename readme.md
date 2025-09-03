@@ -1,3 +1,17 @@
+# Usage
+
+## Interactive mode (default)
+`python3 setup_macos_dev.py`
+
+## Install everything automatically
+`python3 setup_macos_dev.py --all --no-confirm`
+
+## Install only specific components
+`python3 setup_macos_dev.py --select 1,2,6,9`
+
+## List available components
+`python3 setup_macos_dev.py --list`
+
 
 # Complete Feature List:
 ## ✅ Core Tools:
@@ -52,20 +66,5 @@
 - Clear progress indicators
 - Detailed manual configuration guide
 - Troubleshooting information
-
-## Usage:
-```
-# Save as setup_macos_dev.py
-python3 setup_macos_dev.py
-```
-
-The script will:
-- Ask for confirmation before starting
-- Check macOS compatibility
-- Install all tools systematically
-- Configure iTerm2 profile
-- Set up VS Code extensions
-- Guide through GitHub CLI authentication
-- Provide comprehensive summary and next steps
 
 After completion, you'll have a fully configured development environment ready for Python, Node.js, and AI-assisted coding with Claude!
