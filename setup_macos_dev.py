@@ -512,6 +512,134 @@ class MacOSDevSetup:
             self.add_failure(f"Failed to setup Apple media tracking killer: {e}")
             return False
     
+    def setup_download_recycler(self):
+        """Setup script to automatically clean old downloads"""
+        print("⚙️ Setting up Download Recycler script...")
+        
+        try:
+            # Source and destination paths
+            source_script = Path(__file__).parent / 'background_scripts' / 'download_recycler.sh'
+            dest_dir = Path.home() / 'background_scripts'
+            dest_script = dest_dir / 'download_recycler.sh'
+            config_file = dest_dir / 'download_recycler.conf'
+            launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
+            plist_file = launch_agents_dir / 'com.user.downloadrecycler.plist'
+            
+            # Check if source script exists
+            if not source_script.exists():
+                self.add_failure("download_recycler.sh not found in background_scripts directory")
+                return False
+            
+            # Create destination directory if it doesn't exist
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy the script to user's background_scripts directory
+            shutil.copy2(source_script, dest_script)
+            # Make it executable
+            os.chmod(dest_script, 0o755)
+            print(f"Copied script to {dest_script}")
+            
+            # Create or update config file
+            if not config_file.exists():
+                # Ask user for the number of days
+                print("\n" + "="*50)
+                print("Download Recycler Configuration")
+                print("="*50)
+                print("Files in your Downloads folder older than the specified")
+                print("number of days will be automatically moved to Trash.")
+                print("(You can change this later by editing ~/background_scripts/download_recycler.conf)")
+                print()
+                
+                while True:
+                    try:
+                        days_input = input("Enter number of days to keep downloads (default: 30): ").strip()
+                        if days_input == "":
+                            days_to_keep = 30
+                            break
+                        days_to_keep = int(days_input)
+                        if days_to_keep < 1:
+                            print("Please enter a positive number.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Please enter a valid number.")
+                        continue
+                
+                # Write config file
+                config_content = f"""# Download Recycler Configuration
+# Files in Downloads folder older than this many days will be moved to Trash
+DAYS_TO_KEEP={days_to_keep}
+
+# To change this value, simply edit the number above and save the file.
+# The change will take effect on the next scheduled run.
+"""
+                with open(config_file, 'w') as f:
+                    f.write(config_content)
+                print(f"Created config file with {days_to_keep} days retention period")
+            else:
+                print(f"Config file already exists at {config_file}")
+            
+            # Create LaunchAgents directory if it doesn't exist
+            launch_agents_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create the LaunchAgent plist file for daily execution
+            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.downloadrecycler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{dest_script}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>{dest_dir}/download_recycler.out</string>
+    <key>StandardErrorPath</key>
+    <string>{dest_dir}/download_recycler.err</string>
+</dict>
+</plist>"""
+            
+            # Write the plist file
+            with open(plist_file, 'w') as f:
+                f.write(plist_content)
+            
+            print(f"Created LaunchAgent at {plist_file}")
+            
+            # Load the LaunchAgent
+            load_result = self.run_command(f'launchctl load {plist_file}', check=False)
+            
+            # Check if it's already loaded (which would cause an error)
+            if load_result is None or (load_result and 'already loaded' in load_result.stderr.lower()):
+                # Try unloading first then loading again
+                self.run_command(f'launchctl unload {plist_file}', check=False)
+                load_result = self.run_command(f'launchctl load {plist_file}')
+            
+            if load_result:
+                self.add_success("Download Recycler installed and scheduled (runs daily at 9:00 AM)")
+                print(f"Log file: ~/background_scripts/download_recycler.log")
+                print(f"Config file: ~/background_scripts/download_recycler.conf")
+                return True
+            else:
+                self.add_success("Download Recycler installed (will start on next login)")
+                print("Note: Run 'launchctl load ~/Library/LaunchAgents/com.user.downloadrecycler.plist' to start now")
+                print(f"Log file: ~/background_scripts/download_recycler.log")
+                print(f"Config file: ~/background_scripts/download_recycler.conf")
+                return True
+                
+        except Exception as e:
+            self.add_failure(f"Failed to setup Download Recycler: {e}")
+            return False
+    
     def configure_vscode_extensions(self):
         """Configure VS Code extensions"""
         print("⚙️ Configuring VS Code extensions...")
@@ -655,6 +783,10 @@ class MacOSDevSetup:
         print("• launchctl list | grep killapplemediatracking - Check media killer status")
         print("• launchctl unload ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Stop media killer")
         print("• launchctl load ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Start media killer")
+        print("• launchctl list | grep downloadrecycler - Check download recycler status")
+        print("• ~/background_scripts/download_recycler.sh - Run download recycler manually")
+        print("• cat ~/background_scripts/download_recycler.log - View download recycler log")
+        print("• nano ~/background_scripts/download_recycler.conf - Edit download recycler settings")
     
     def get_installation_steps(self):
         """Get all available installation steps"""
@@ -672,6 +804,7 @@ class MacOSDevSetup:
             ("GitHub CLI", "GitHub command line tool", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI", self.setup_github_cli),
             ("Apple Media Tracking Killer", "Background process to disable media tracking", self.setup_kill_apple_media_tracking),
+            ("Download Recycler", "Auto-clean old files from Downloads folder", self.setup_download_recycler),
         ]
     
     def display_checkbox_menu(self):
