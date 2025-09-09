@@ -2,7 +2,7 @@
 # export PATH=$HOME/bin:/usr/local/bin:$PATH
 
 # Path to your oh-my-zsh installation.
-export ZSH="/Users/nicholassmith/.oh-my-zsh"
+export ZSH="$HOME/.oh-my-zsh"
 
 # Set name of the theme to load. Optionally, if you set this to "random"
 # it'll load a random theme each time that oh-my-zsh is loaded.
@@ -57,6 +57,8 @@ ZSH_THEME="avit"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
   git
+  python
+  macos
 )
 
 source $ZSH/oh-my-zsh.sh
@@ -74,35 +76,47 @@ alias zshconfig="code ~/.zshrc"
 alias ohmyzsh="code ~/.oh-my-zsh"
 alias refreshmain="git fetch --all && git checkout main && git rebase upstream/main && sh ./setup.sh"
 
+
+## Git Shortcuts ##
+
+# Git status alias
 alias status="git status"
 
+# Git commit alias function
+function commit() {
+  git commit -m "$1"
+}
+
+# Git checkout alias function
 function co() {
 	git checkout $1
 }
 
-function commit() {
-	git commit -m "$1" --no-verify
-}
-
+# Git amend no-verify alias function
 function amend() {
 	git commit --amend --no-verify
 }
 
-function testcommit() {
-	git commit -m "$1";
-}
-
+# Git checkout -b alias function
 function branch() {
 	git checkout -b "$1"
 }
 
-function push() {
-	branch_name="$(git symbolic-ref HEAD 2>/dev/null)" ||
-	branch_name="(unnamed branch)"
-	branch_name=${branch_name##refs/heads/}
-	git push origin $branch_name
+# Git push alias function
+push() {
+  git push origin $(git branch --show-current)
 }
 
+# Git add alias function
 function add() {
 	git add .
+}
+
+
+## cron / crontab ##
+
+# View crontab files alias function
+function view_crontab_file() {
+  sudo su
+  cd /var/at/tabs
 }
