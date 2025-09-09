@@ -293,6 +293,9 @@ class MacOSDevSetup:
             self.add_failure("iTerm2 installation failed")
             return False
     
+    # NOTE!
+    # With the release of macOS Catalina in 2019, Apple officially changed the default login shell and interactive shell from Bash to Zsh (Z shell)
+    # However, I'm leaving this in since it would make it easier to broaden the scope of this project to more than just MacOS
     def install_zsh(self):
         """Ensure ZSH is installed and set as default shell"""
         print("📦 Checking ZSH installation...")
