@@ -90,9 +90,3 @@ if type brew &>/dev/null; then
 fi
 
 
-## compinit - ZSH programmable completion system ##
-
-# Initialize the completion system (if not already done)
-autoload -Uz compinit
-compinit
-
