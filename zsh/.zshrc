@@ -32,7 +32,6 @@ alias python="python3"
 alias zshconfig="vim ~/.zshrc"
 alias zshrc="source ~/.zshrc"
 alias ohmyzsh="vim ~/.oh-my-zsh"
-alias refreshmain="git fetch --all && git checkout main && git rebase upstream/main && sh ./setup.sh"
 
 
 ## Git Shortcuts ##
