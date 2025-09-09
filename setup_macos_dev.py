@@ -439,17 +439,21 @@ class MacOSDevSetup:
         
         try:
             # Source and destination paths
-            source_script = Path(__file__).parent / 'killapplemediatracking.sh'
-            dest_script = Path.home() / '.killapplemediatracking.sh'
+            source_script = Path(__file__).parent / 'background_scripts' / 'killapplemediatracking.sh'
+            dest_dir = Path.home() / 'background_scripts'
+            dest_script = dest_dir / 'killapplemediatracking.sh'
             launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
             plist_file = launch_agents_dir / 'com.user.killapplemediatracking.plist'
             
             # Check if source script exists
             if not source_script.exists():
-                self.add_failure("killapplemediatracking.sh not found in project directory")
+                self.add_failure("killapplemediatracking.sh not found in background_scripts directory")
                 return False
             
-            # Copy the script to user's home directory (hidden)
+            # Create destination directory if it doesn't exist
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Copy the script to user's background_scripts directory
             shutil.copy2(source_script, dest_script)
             # Make it executable
             os.chmod(dest_script, 0o755)
