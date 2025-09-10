@@ -708,6 +708,34 @@ DAYS_TO_KEEP={days_to_keep}
             self.add_failure("GitHub CLI installation failed")
             return False
     
+    def install_dark_mode_toggle(self):
+        """Install NightOwl - a menu bar app for toggling dark mode"""
+        print("📦 Installing NightOwl (Dark Mode Toggle)...")
+        
+        # Check if already installed
+        nightowl_app = Path("/Applications/NightOwl.app")
+        if nightowl_app.exists():
+            self.add_success("NightOwl already installed")
+            return True
+        
+        # Install NightOwl via Homebrew Cask
+        result = self.run_command('brew install --cask nightowl')
+        if result:
+            self.add_success("NightOwl (Dark Mode Toggle) installed")
+            print("✨ NightOwl will appear in your menu bar after launch")
+            print("💡 You can toggle dark mode with the menu bar icon or set keyboard shortcuts")
+            
+            # Optionally launch NightOwl
+            launch = input("\nWould you like to launch NightOwl now? (y/n): ").lower().strip()
+            if launch in ['y', 'yes']:
+                self.run_command('open -a NightOwl', check=False)
+                print("NightOwl launched - check your menu bar!")
+            
+            return True
+        else:
+            self.add_failure("NightOwl installation failed")
+            return False
+    
     def setup_github_cli(self):
         """Prompt user to sign into GitHub CLI and open browser"""
         print("🔐 Setting up GitHub CLI authentication...")
@@ -803,6 +831,7 @@ DAYS_TO_KEEP={days_to_keep}
             ("VS Code Extensions", "Claude Code and Python extensions", self.configure_vscode_extensions),
             ("GitHub CLI", "GitHub command line tool", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI", self.setup_github_cli),
+            ("Dark Mode Toggle", "NightOwl menu bar app for dark/light mode switching", self.install_dark_mode_toggle),
             ("Apple Media Tracking Killer", "Background process to disable media tracking", self.setup_kill_apple_media_tracking),
             ("Download Recycler", "Auto-clean old files from Downloads folder", self.setup_download_recycler),
         ]
