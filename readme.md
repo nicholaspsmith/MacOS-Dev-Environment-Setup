@@ -1,5 +1,9 @@
 # Usage
 
+## Prerequisites
+If you wan't to install the dark/light theme switcher, you'll need to have XCode installed:
+[Install XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12)
+
 ## Interactive mode (default)
 `python3 setup_macos_dev.py`
 
