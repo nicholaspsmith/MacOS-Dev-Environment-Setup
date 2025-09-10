@@ -709,31 +709,85 @@ DAYS_TO_KEEP={days_to_keep}
             return False
     
     def install_dark_mode_toggle(self):
-        """Install NightOwl - a menu bar app for toggling dark mode"""
-        print("📦 Installing NightOwl (Dark Mode Toggle)...")
+        """Build and install ThemeToggle - a custom menu bar app for toggling dark mode"""
+        print("📦 Building and installing ThemeToggle (Dark Mode Toggle)...")
         
         # Check if already installed
-        nightowl_app = Path("/Applications/NightOwl.app")
-        if nightowl_app.exists():
-            self.add_success("NightOwl already installed")
+        themetoggle_app = Path("/Applications/ThemeToggle.app")
+        if themetoggle_app.exists():
+            self.add_success("ThemeToggle already installed")
             return True
         
-        # Install NightOwl via Homebrew Cask
-        result = self.run_command('brew install --cask nightowl')
-        if result:
-            self.add_success("NightOwl (Dark Mode Toggle) installed")
-            print("✨ NightOwl will appear in your menu bar after launch")
-            print("💡 You can toggle dark mode with the menu bar icon or set keyboard shortcuts")
+        # Check if Xcode is installed
+        if not shutil.which('xcodebuild'):
+            print("❌ Xcode is required to build ThemeToggle")
+            print("Please install Xcode from the Mac App Store and try again")
+            self.add_failure("ThemeToggle installation failed - Xcode not found")
+            return False
+        
+        # Get the script directory
+        script_dir = Path(__file__).parent
+        project_path = script_dir / "mac_light_dark_toggle" / "ThemeToggle"
+        
+        if not project_path.exists():
+            print("❌ ThemeToggle project not found")
+            self.add_failure("ThemeToggle installation failed - project not found")
+            return False
+        
+        # Build the app
+        print("🔨 Building ThemeToggle app...")
+        build_cmd = f'cd "{project_path}" && xcodebuild -project ThemeToggle.xcodeproj -scheme ThemeToggle -configuration Release build CONFIGURATION_BUILD_DIR=./build'
+        result = self.run_command(build_cmd, shell=True, capture_output=True)
+        
+        if not result:
+            self.add_failure("ThemeToggle build failed")
+            return False
+        
+        # Check if build was successful
+        built_app = project_path / "build" / "ThemeToggle.app"
+        if not built_app.exists():
+            self.add_failure("ThemeToggle build failed - app not found")
+            return False
+        
+        # Copy to Applications folder
+        print("📂 Installing ThemeToggle to Applications folder...")
+        try:
+            # Remove existing app if present
+            if themetoggle_app.exists():
+                shutil.rmtree(themetoggle_app)
             
-            # Optionally launch NightOwl
-            launch = input("\nWould you like to launch NightOwl now? (y/n): ").lower().strip()
+            # Copy the app
+            shutil.copytree(built_app, themetoggle_app)
+            
+            # Make it executable
+            self.run_command(f'chmod +x "{themetoggle_app}/Contents/MacOS/ThemeToggle"', shell=True)
+            
+            self.add_success("ThemeToggle installed successfully")
+            print("✨ ThemeToggle will appear in your menu bar after launch")
+            print("💡 Click the menu bar icon to toggle between light and dark mode")
+            print("\n⚠️  Note: On first launch, macOS will ask for permission to control System Events")
+            print("   Please grant this permission for the app to work properly")
+            
+            # Optionally launch ThemeToggle
+            launch = input("\nWould you like to launch ThemeToggle now? (y/n): ").lower().strip()
             if launch in ['y', 'yes']:
-                self.run_command('open -a NightOwl', check=False)
-                print("NightOwl launched - check your menu bar!")
+                self.run_command(f'open "{themetoggle_app}"', shell=True, check=False)
+                print("ThemeToggle launched - check your menu bar!")
+                print("If prompted, please grant permission to control System Events")
+            
+            # Add to login items
+            add_login = input("\nWould you like ThemeToggle to start automatically at login? (y/n): ").lower().strip()
+            if add_login in ['y', 'yes']:
+                # Use osascript to add to login items
+                add_login_cmd = f'''osascript -e 'tell application "System Events" to make login item at end with properties {{path:"{themetoggle_app}", hidden:false}}' '''
+                self.run_command(add_login_cmd, shell=True, check=False)
+                print("ThemeToggle added to login items")
             
             return True
-        else:
-            self.add_failure("NightOwl installation failed")
+            
+        except Exception as e:
+            print(f"❌ Failed to install ThemeToggle: {e}")
+            self.add_failure("ThemeToggle installation failed")
             return False
     
     def setup_github_cli(self):
