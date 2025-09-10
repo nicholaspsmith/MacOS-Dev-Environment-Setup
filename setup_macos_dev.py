@@ -718,12 +718,35 @@ DAYS_TO_KEEP={days_to_keep}
             self.add_success("ThemeToggle already installed")
             return True
         
-        # Check if Xcode is installed
+        # Check if Xcode is installed and properly configured
         if not shutil.which('xcodebuild'):
             print("❌ Xcode is required to build ThemeToggle")
             print("Please install Xcode from the Mac App Store and try again")
             self.add_failure("ThemeToggle installation failed - Xcode not found")
             return False
+        
+        # Check if xcode-select is pointing to full Xcode
+        xcode_path_result = self.run_command('xcode-select -p', shell=True, capture_output=True)
+        if xcode_path_result and 'CommandLineTools' in xcode_path_result.stdout:
+            print("⚠️  Xcode Command Line Tools detected, but full Xcode is required")
+            print("🔧 Attempting to switch to full Xcode installation...")
+            
+            # Try to find and set Xcode path
+            if Path("/Applications/Xcode.app").exists():
+                print("Found Xcode at /Applications/Xcode.app")
+                print("Switching xcode-select to use full Xcode (may require admin password)...")
+                switch_result = self.run_command('sudo xcode-select -s /Applications/Xcode.app/Contents/Developer', shell=True, capture_output=False)
+                if not switch_result:
+                    print("❌ Failed to switch to Xcode. Please run manually:")
+                    print("   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
+                    self.add_failure("ThemeToggle installation failed - Could not configure Xcode")
+                    return False
+            else:
+                print("❌ Xcode.app not found in /Applications/")
+                print("Please install Xcode from the Mac App Store and run:")
+                print("   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
+                self.add_failure("ThemeToggle installation failed - Xcode not properly installed")
+                return False
         
         # Get the script directory
         script_dir = Path(__file__).parent
