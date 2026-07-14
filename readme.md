@@ -48,7 +48,7 @@ on a machine that might not have Homebrew yet.)
 | 6 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
 | 7 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
 | 8 | Claude Code | native installer → `~/.local/bin/claude` (brew cask fallback) |
-| 9 | VS Code | installs the editor + `code` CLI |
+| 9 | VS Code | installs the latest VS Code + puts the `code` command on PATH (brew-bin symlink and `~/.zshrc`) |
 | 10 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 11 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 12 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |

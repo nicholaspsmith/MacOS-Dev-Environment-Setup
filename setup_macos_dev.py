@@ -411,54 +411,42 @@ class MacOSDevSetup:
         return False
     
     def setup_vscode_cli(self):
-        """Set up the VS Code 'code' command in PATH"""
+        """Make the 'code' command available: brew-bin symlink + zsh profile PATH"""
         print("⚙️ Setting up VS Code 'code' command...")
-        
-        # Check if code command already exists
-        if shutil.which('code'):
-            self.add_success("'code' command already available")
-            return True
-        
-        # Try to create symlink in /usr/local/bin (requires sudo)
+
         vscode_bin = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
-        
         if not os.path.exists(vscode_bin):
             self.add_failure("VS Code binary not found")
             return False
-        
-        # Try multiple approaches for setting up the code command
-        approaches = [
-            # Approach 1: Try /usr/local/bin symlink
-            ('Creating symlink in /usr/local/bin', 
-             f'sudo ln -sf "{vscode_bin}" /usr/local/bin/code'),
-            
-            # Approach 2: Try homebrew's bin directory
-            ('Creating symlink in homebrew bin', 
-             f'ln -sf "{vscode_bin}" /opt/homebrew/bin/code'),
-            
-            # Approach 3: Add to shell profile
-            ('Adding to PATH in shell profile', None)  # Special case
-        ]
-        
-        for approach_name, command in approaches:
-            try:
-                if command:
-                    result = self.run_command(command, shell=True, capture_output=False)
-                    if result and shutil.which('code'):
-                        self.add_success(f"'code' command set up via {approach_name.lower()}")
-                        return True
-                else:
-                    # Special case: add to shell profile
-                    self.add_to_shell_profile(f'export PATH="$PATH:{os.path.dirname(vscode_bin)}"')
-                    print("Added VS Code to PATH in shell profile (restart terminal to use 'code' command)")
-                    # For current session, add to PATH
-                    os.environ['PATH'] = f"{os.environ['PATH']}:{os.path.dirname(vscode_bin)}"
-                    self.add_success("'code' command added to PATH")
-                    return True
-            except Exception as e:
-                print(f"Approach '{approach_name}' failed: {e}")
-                continue
-        
+
+        wired = []
+
+        # Symlink into Homebrew's bin — already on PATH, no sudo needed.
+        # (The cask normally creates this itself; this covers manual installs.)
+        if not shutil.which('code'):
+            for prefix in ('/opt/homebrew/bin', '/usr/local/bin'):
+                if os.path.isdir(prefix) and os.access(prefix, os.W_OK):
+                    result = self.run_command(f'ln -sf "{vscode_bin}" {prefix}/code',
+                                              shell=True, check=False)
+                    if result and result.returncode == 0 and shutil.which('code'):
+                        wired.append(f"symlink in {prefix}")
+                        break
+
+        # Also guarantee it in the shell profile (~/.zshrc), so `code` keeps
+        # working even if the symlink is ever removed. Idempotent: the same
+        # line ships in the repo's zsh/.zshrc, and add_to_shell_profile
+        # skips lines that are already present.
+        if self.add_to_shell_profile(f'export PATH="$PATH:{os.path.dirname(vscode_bin)}"'):
+            wired.append(f"PATH in {self.shell_profile.name}")
+
+        # Current session too
+        if os.path.dirname(vscode_bin) not in os.environ['PATH']:
+            os.environ['PATH'] = f"{os.environ['PATH']}:{os.path.dirname(vscode_bin)}"
+
+        if shutil.which('code'):
+            detail = f" ({', '.join(wired)})" if wired else " (already available)"
+            self.add_success(f"'code' command ready{detail}")
+            return True
         self.add_failure("Could not set up 'code' command")
         return False
     
@@ -1103,7 +1091,7 @@ DAYS_TO_KEEP={days_to_keep}
             ("NVM & Node.js LTS", "Node Version Manager (Homebrew) and Node.js", self.install_nvm),
             ("iTerm2 Quake profile", "Hotkey dropdown profile via DynamicProfiles", self.install_iterm_profile),
             ("Claude Code", "Claude AI coding assistant (native installer)", self.install_claude_code),
-            ("VS Code", "Visual Studio Code editor", self.install_vscode),
+            ("VS Code", "Latest VS Code + 'code' command on PATH (zsh profile)", self.install_vscode),
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),

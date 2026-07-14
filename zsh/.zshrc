@@ -39,6 +39,8 @@ export PATH=/opt/homebrew/bin:$PATH
 export PATH="$PATH:$HOME/.rvm/bin"
 export PATH="$HOME/.meteor:$PATH"
 export PATH="$PATH:$HOME/.local/bin"
+# VS Code 'code' CLI (harmless if VS Code isn't installed)
+export PATH="$PATH:/Applications/Visual Studio Code.app/Contents/Resources/app/bin"
 export PATH="$PATH:$HOME/.cargo/bin/rust-analyzer"
 export PATH="$PATH:/Library/PostgreSQL/18/bin"
 export PNPM_HOME="$HOME/Library/pnpm"
