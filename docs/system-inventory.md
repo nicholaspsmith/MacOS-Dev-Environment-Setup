@@ -33,7 +33,7 @@ survive rebuilds.
 | com.nicholassmith.mullvad-tailscale-dns | **automated** | vpn-dns-menubar repo (DNS watcher) |
 | com.nicholassmith.code-catalog | **automated** | this repo (`local_bin/code-catalog-*`) |
 | com.nicholassmith.mov-watcher | **automated** | this repo (`background_scripts/mov_watcher.sh`) — new label; was not previously installed |
-| com.nicholassmith.battery-time-power-watch | not reproduced | SwiftBar-era; still loaded on the audited machine even though the Swift app handles plug/unplug in-process — candidate for removal |
+| com.nicholassmith.battery-time-power-watch | **retired by setup** | SwiftBar-era; superseded by the Swift app's in-process IOKit watcher (`main.swift`). The menu-bar suite component boots it out and deletes its plist when it finds one |
 | com.nicholassmith.godot-headless-reaper | not reproduced | machine-specific (`~/.local/bin/godot-headless-reaper`) |
 | com.nicholassmith.networkscan / networkscan-server | not reproduced | project-specific (`~/Code/networkscan`, github: Network-Scan-Web-UI) |
 | com.user.killapplemediatracking | optional component | in repo; was NOT installed on the audited machine |

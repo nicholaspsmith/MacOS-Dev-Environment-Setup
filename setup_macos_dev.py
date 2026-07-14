@@ -933,6 +933,19 @@ DAYS_TO_KEEP={days_to_keep}
                              shell=True, check=False)
             built.append(app_name)
 
+        # The Battery Time Swift app watches power sources in-process (IOKit),
+        # superseding the SwiftBar-era power-watch launchd agent. Retire the
+        # old agent if a prior install left it behind (matches the repo's own
+        # documented uninstall).
+        legacy_label = 'com.nicholassmith.battery-time-power-watch'
+        legacy_plist = Path.home() / 'Library' / 'LaunchAgents' / f'{legacy_label}.plist'
+        if legacy_plist.exists() and any(a.startswith('Battery Time') for a in built):
+            self.run_command(f'launchctl bootout gui/{os.getuid()}/{legacy_label}',
+                             shell=True, check=False)
+            legacy_plist.unlink()
+            print(f"🧹 Retired legacy {legacy_label} agent "
+                  "(superseded by Battery Time's in-process IOKit watcher)")
+
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
             print("💡 Launch each app once and grant its permissions (KeyLight needs Accessibility);")
