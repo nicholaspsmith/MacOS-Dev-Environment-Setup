@@ -32,7 +32,17 @@ MENU_BAR_APP_REPOS = [
     ('battery-time-menubar', 'https://github.com/nicholaspsmith/battery-time-menubar.git', 'Battery Time.app'),
     ('keylight-menubar', 'https://github.com/nicholaspsmith/keylight-menubar.git', 'KeyLight.app'),
     ('MacRecorder', 'https://github.com/nicholaspsmith/MacRecorder.git', 'MacRecorder.app'),
+    ('media-tracking-killer-menubar', 'https://github.com/nicholaspsmith/media-tracking-killer-menubar.git', 'Media Tracking Killer.app'),
+    ('download-recycler-menubar', 'https://github.com/nicholaspsmith/download-recycler-menubar.git', 'Download Recycler.app'),
 ]
+
+# launchd agents that older installs used for jobs the Swift apps now do
+# in-process. The suite step retires an app's legacy agent after linking it.
+LEGACY_AGENT_LABELS = {
+    'Battery Time.app': 'com.nicholassmith.battery-time-power-watch',
+    'Media Tracking Killer.app': 'com.user.killapplemediatracking',
+    'Download Recycler.app': 'com.user.downloadrecycler',
+}
 
 GIT_USER_NAME = 'nicholaspsmith'
 GIT_USER_EMAIL = 'npsmith1990@gmail.com'
@@ -466,199 +476,6 @@ class MacOSDevSetup:
             print(f"Warning: Could not update shell profile: {e}")
         return False
     
-    def setup_kill_apple_media_tracking(self):
-        """Setup script to kill Apple media tracking processes"""
-        print("⚙️ Setting up Apple media tracking killer script...")
-        
-        try:
-            # Source and destination paths
-            source_script = Path(__file__).parent / 'background_scripts' / 'killapplemediatracking.sh'
-            dest_dir = Path.home() / 'background_scripts'
-            dest_script = dest_dir / 'killapplemediatracking.sh'
-            launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
-            plist_file = launch_agents_dir / 'com.user.killapplemediatracking.plist'
-            
-            # Check if source script exists
-            if not source_script.exists():
-                self.add_failure("killapplemediatracking.sh not found in background_scripts directory")
-                return False
-            
-            # Create destination directory if it doesn't exist
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Copy the script to user's background_scripts directory
-            shutil.copy2(source_script, dest_script)
-            # Make it executable
-            os.chmod(dest_script, 0o755)
-            print(f"Copied script to {dest_script}")
-            
-            # Create LaunchAgents directory if it doesn't exist
-            launch_agents_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create the LaunchAgent plist file
-            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.user.killapplemediatracking</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{dest_script}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/killapplemediatracking.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/killapplemediatracking.error.log</string>
-</dict>
-</plist>"""
-            
-            # Write the plist file
-            with open(plist_file, 'w') as f:
-                f.write(plist_content)
-            
-            print(f"Created LaunchAgent at {plist_file}")
-            
-            # Load the LaunchAgent
-            if self.load_launch_agent(plist_file, 'com.user.killapplemediatracking'):
-                self.add_success("Apple media tracking killer script installed and started")
-                print("The script will run continuously in the background and restart on login")
-                return True
-            else:
-                self.add_success("Apple media tracking killer script installed (will start on next login)")
-                print("Note: Run 'launchctl load ~/Library/LaunchAgents/com.user.killapplemediatracking.plist' to start now")
-                return True
-                
-        except Exception as e:
-            self.add_failure(f"Failed to setup Apple media tracking killer: {e}")
-            return False
-    
-    def setup_download_recycler(self):
-        """Setup script to automatically clean old downloads"""
-        print("⚙️ Setting up Download Recycler script...")
-        
-        try:
-            # Source and destination paths
-            source_script = Path(__file__).parent / 'background_scripts' / 'download_recycler.sh'
-            dest_dir = Path.home() / 'background_scripts'
-            dest_script = dest_dir / 'download_recycler.sh'
-            config_file = dest_dir / 'download_recycler.conf'
-            launch_agents_dir = Path.home() / 'Library' / 'LaunchAgents'
-            plist_file = launch_agents_dir / 'com.user.downloadrecycler.plist'
-            
-            # Check if source script exists
-            if not source_script.exists():
-                self.add_failure("download_recycler.sh not found in background_scripts directory")
-                return False
-            
-            # Create destination directory if it doesn't exist
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Copy the script to user's background_scripts directory
-            shutil.copy2(source_script, dest_script)
-            # Make it executable
-            os.chmod(dest_script, 0o755)
-            print(f"Copied script to {dest_script}")
-            
-            # Create or update config file
-            if not config_file.exists():
-                days_to_keep = 30
-                if not self.no_confirm:
-                    # Ask user for the number of days
-                    print("\n" + "="*50)
-                    print("Download Recycler Configuration")
-                    print("="*50)
-                    print("Files in your Downloads folder older than the specified")
-                    print("number of days will be automatically moved to Trash.")
-                    print("(You can change this later by editing ~/background_scripts/download_recycler.conf)")
-                    print()
-
-                    while True:
-                        try:
-                            days_input = input("Enter number of days to keep downloads (default: 30): ").strip()
-                            if days_input == "":
-                                days_to_keep = 30
-                                break
-                            days_to_keep = int(days_input)
-                            if days_to_keep < 1:
-                                print("Please enter a positive number.")
-                                continue
-                            break
-                        except ValueError:
-                            print("Please enter a valid number.")
-                            continue
-                
-                # Write config file
-                config_content = f"""# Download Recycler Configuration
-# Files in Downloads folder older than this many days will be moved to Trash
-DAYS_TO_KEEP={days_to_keep}
-
-# To change this value, simply edit the number above and save the file.
-# The change will take effect on the next scheduled run.
-"""
-                with open(config_file, 'w') as f:
-                    f.write(config_content)
-                print(f"Created config file with {days_to_keep} days retention period")
-            else:
-                print(f"Config file already exists at {config_file}")
-            
-            # Create LaunchAgents directory if it doesn't exist
-            launch_agents_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create the LaunchAgent plist file for daily execution
-            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.user.downloadrecycler</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>{dest_script}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <false/>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>9</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>{dest_dir}/download_recycler.out</string>
-    <key>StandardErrorPath</key>
-    <string>{dest_dir}/download_recycler.err</string>
-</dict>
-</plist>"""
-            
-            # Write the plist file
-            with open(plist_file, 'w') as f:
-                f.write(plist_content)
-            
-            print(f"Created LaunchAgent at {plist_file}")
-            
-            # Load the LaunchAgent
-            if self.load_launch_agent(plist_file, 'com.user.downloadrecycler'):
-                self.add_success("Download Recycler installed and scheduled (runs daily at 9:00 AM)")
-                print(f"Log file: ~/background_scripts/download_recycler.log")
-                print(f"Config file: ~/background_scripts/download_recycler.conf")
-                return True
-            else:
-                self.add_success("Download Recycler installed (will start on next login)")
-                print("Note: Run 'launchctl load ~/Library/LaunchAgents/com.user.downloadrecycler.plist' to start now")
-                print(f"Log file: ~/background_scripts/download_recycler.log")
-                print(f"Config file: ~/background_scripts/download_recycler.conf")
-                return True
-                
-        except Exception as e:
-            self.add_failure(f"Failed to setup Download Recycler: {e}")
-            return False
-    
     def configure_vscode_extensions(self):
         """Configure VS Code extensions"""
         print("⚙️ Configuring VS Code extensions...")
@@ -719,109 +536,6 @@ DAYS_TO_KEEP={days_to_keep}
         lfs = self.run_command('git lfs install', check=False)
         self.add_success(f"git configured (user.name={GIT_USER_NAME}, LFS {'enabled' if lfs and lfs.returncode == 0 else 'skipped'})")
         return True
-    
-    def install_dark_mode_toggle(self):
-        """Build and install ThemeToggle - a custom menu bar app for toggling dark mode"""
-        print("📦 Building and installing ThemeToggle (Dark Mode Toggle)...")
-        
-        # Check if already installed
-        themetoggle_app = Path("/Applications/ThemeToggle.app")
-        if themetoggle_app.exists():
-            self.add_success("ThemeToggle already installed")
-            return True
-        
-        # Check if Xcode is installed and properly configured
-        if not shutil.which('xcodebuild'):
-            print("❌ Xcode is required to build ThemeToggle")
-            print("Please install Xcode from the Mac App Store and try again")
-            self.add_failure("ThemeToggle installation failed - Xcode not found")
-            return False
-        
-        # Check if xcode-select is pointing to full Xcode
-        xcode_path_result = self.run_command('xcode-select -p', shell=True, capture_output=True)
-        if xcode_path_result and 'CommandLineTools' in xcode_path_result.stdout:
-            print("⚠️  Xcode Command Line Tools detected, but full Xcode is required")
-            print("🔧 Attempting to switch to full Xcode installation...")
-            
-            # Try to find and set Xcode path
-            if Path("/Applications/Xcode.app").exists():
-                print("Found Xcode at /Applications/Xcode.app")
-                print("Switching xcode-select to use full Xcode (may require admin password)...")
-                switch_result = self.run_command('sudo xcode-select -s /Applications/Xcode.app/Contents/Developer', shell=True, capture_output=False)
-                if not switch_result:
-                    print("❌ Failed to switch to Xcode. Please run manually:")
-                    print("   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
-                    self.add_failure("ThemeToggle installation failed - Could not configure Xcode")
-                    return False
-            else:
-                print("❌ Xcode.app not found in /Applications/")
-                print("Please install Xcode from the Mac App Store and run:")
-                print("   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer")
-                self.add_failure("ThemeToggle installation failed - Xcode not properly installed")
-                return False
-        
-        # Get the script directory
-        script_dir = Path(__file__).parent
-        project_path = script_dir / "mac_light_dark_toggle" / "ThemeToggle"
-        
-        if not project_path.exists():
-            print("❌ ThemeToggle project not found")
-            self.add_failure("ThemeToggle installation failed - project not found")
-            return False
-        
-        # Build the app
-        print("🔨 Building ThemeToggle app...")
-        build_cmd = f'cd "{project_path}" && xcodebuild -project ThemeToggle.xcodeproj -scheme ThemeToggle -configuration Release build CONFIGURATION_BUILD_DIR=./build'
-        result = self.run_command(build_cmd, shell=True, capture_output=True)
-        
-        if not result:
-            self.add_failure("ThemeToggle build failed")
-            return False
-        
-        # Check if build was successful
-        built_app = project_path / "build" / "ThemeToggle.app"
-        if not built_app.exists():
-            self.add_failure("ThemeToggle build failed - app not found")
-            return False
-        
-        # Copy to Applications folder
-        print("📂 Installing ThemeToggle to Applications folder...")
-        try:
-            # Remove existing app if present
-            if themetoggle_app.exists():
-                shutil.rmtree(themetoggle_app)
-            
-            # Copy the app
-            shutil.copytree(built_app, themetoggle_app)
-            
-            # Make it executable
-            self.run_command(f'chmod +x "{themetoggle_app}/Contents/MacOS/ThemeToggle"', shell=True)
-            
-            self.add_success("ThemeToggle installed successfully")
-            print("✨ ThemeToggle will appear in your menu bar after launch")
-            print("💡 Click the menu bar icon to toggle between light and dark mode")
-            print("\n⚠️  Note: On first launch, macOS will ask for permission to control System Events")
-            print("   Please grant this permission for the app to work properly")
-            
-            # Optionally launch ThemeToggle
-            if self.ask_yes_no("\nWould you like to launch ThemeToggle now? (y/n): "):
-                self.run_command(f'open "{themetoggle_app}"', shell=True, check=False)
-                print("ThemeToggle launched - check your menu bar!")
-                print("If prompted, please grant permission to control System Events")
-
-            # Add to login items
-            if self.ask_yes_no("\nWould you like ThemeToggle to start automatically at login? (y/n): "):
-                # Use osascript to add to login items
-                add_login_cmd = f'''osascript -e 'tell application "System Events" to make login item at end with properties {{path:"{themetoggle_app}", hidden:false}}' '''
-                self.run_command(add_login_cmd, shell=True, check=False)
-                print("ThemeToggle added to login items")
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Failed to install ThemeToggle: {e}")
-            self.add_failure("ThemeToggle installation failed")
-            return False
     
     def setup_github_cli(self):
         """Prompt user to sign into GitHub CLI and wire it as git credential helper"""
@@ -921,18 +635,15 @@ DAYS_TO_KEEP={days_to_keep}
                              shell=True, check=False)
             built.append(app_name)
 
-        # The Battery Time Swift app watches power sources in-process (IOKit),
-        # superseding the SwiftBar-era power-watch launchd agent. Retire the
-        # old agent if a prior install left it behind (matches the repo's own
-        # documented uninstall).
-        legacy_label = 'com.nicholassmith.battery-time-power-watch'
-        legacy_plist = Path.home() / 'Library' / 'LaunchAgents' / f'{legacy_label}.plist'
-        if legacy_plist.exists() and any(a.startswith('Battery Time') for a in built):
-            self.run_command(f'launchctl bootout gui/{os.getuid()}/{legacy_label}',
-                             shell=True, check=False)
-            legacy_plist.unlink()
-            print(f"🧹 Retired legacy {legacy_label} agent "
-                  "(superseded by Battery Time's in-process IOKit watcher)")
+        # Retire launchd agents that the Swift apps now handle in-process
+        # (matches each repo's documented uninstall of its predecessor).
+        for app_name, legacy_label in LEGACY_AGENT_LABELS.items():
+            legacy_plist = Path.home() / 'Library' / 'LaunchAgents' / f'{legacy_label}.plist'
+            if legacy_plist.exists() and any(a.startswith(app_name.removesuffix('.app')) for a in built):
+                self.run_command(f'launchctl bootout gui/{os.getuid()}/{legacy_label}',
+                                 shell=True, check=False)
+                legacy_plist.unlink()
+                print(f"🧹 Retired legacy {legacy_label} agent (superseded by {app_name})")
 
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
@@ -941,6 +652,26 @@ DAYS_TO_KEEP={days_to_keep}
         if failed:
             self.add_failure(f"Menu-bar apps failed: {', '.join(failed)}")
         return not failed
+
+    def install_cask_app(self, cask, app_path, display_name):
+        """Install a single cask unless its app already exists"""
+        print(f"📦 Installing {display_name}...")
+        if Path(app_path).exists():
+            self.add_success(f"{display_name} already installed")
+            return True
+        if self.run_command(f'brew install --cask {cask}'):
+            self.add_success(f"{display_name} installed")
+            return True
+        self.add_failure(f"{display_name} installation failed")
+        return False
+
+    def install_tailscale(self):
+        """Install the Tailscale Mac app"""
+        return self.install_cask_app('tailscale-app', '/Applications/Tailscale.app', 'Tailscale')
+
+    def install_mullvad(self):
+        """Install the Mullvad VPN app"""
+        return self.install_cask_app('mullvad-vpn', '/Applications/Mullvad VPN.app', 'Mullvad VPN')
 
     def install_vpn_dns_agent(self):
         """Install the Mullvad/Tailscale DNS-sync launchd agent from vpn-dns-menubar"""
@@ -990,6 +721,8 @@ DAYS_TO_KEEP={days_to_keep}
         local_bin = Path.home() / '.local' / 'bin'
         label = 'com.nicholassmith.code-catalog'
         try:
+            # The watcher watches ~/Code — make sure it exists on a fresh machine
+            (Path.home() / 'Code').mkdir(exist_ok=True)
             local_bin.mkdir(parents=True, exist_ok=True)
             for script in ['code-catalog-refresh', 'code-catalog-watch']:
                 src = source_dir / script
@@ -1008,34 +741,6 @@ DAYS_TO_KEEP={days_to_keep}
             return True
         except Exception as e:
             self.add_failure(f"Code catalog installation failed: {e}")
-            return False
-
-    def setup_mov_watcher(self):
-        """Install the Downloads MOV → MP4 auto-converter watcher"""
-        print("⚙️ Setting up MOV → MP4 watcher...")
-
-        label = 'com.nicholassmith.mov-watcher'
-        source_script = Path(__file__).parent / 'background_scripts' / 'mov_watcher.sh'
-        if not source_script.exists():
-            self.add_failure("mov_watcher.sh not found in background_scripts directory")
-            return False
-        try:
-            dest_dir = Path.home() / 'background_scripts'
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            dest_script = dest_dir / 'mov_watcher.sh'
-            shutil.copy2(source_script, dest_script)
-            os.chmod(dest_script, 0o755)
-
-            # ThrottleInterval keeps a missing-fswatch failure from hot-looping
-            if self.install_launch_agent(label, [dest_script], 'mov-watcher.log',
-                                         extra={'ThrottleInterval': 300}):
-                self.add_success("MOV watcher started (converts Downloads/*.mov to .mp4)")
-            else:
-                self.add_success("MOV watcher installed (starts at next login)")
-            print("💡 Requires fswatch and ffmpeg (Brewfile)")
-            return True
-        except Exception as e:
-            self.add_failure(f"MOV watcher installation failed: {e}")
             return False
 
     def print_summary(self):
@@ -1063,10 +768,9 @@ DAYS_TO_KEEP={days_to_keep}
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
         print("• TCC permissions: Accessibility for KeyLight, Screen Recording for MacRecorder,")
-        print("  System Events for ThemeToggle — grant when each app first asks")
+        print("  Downloads-folder access for Download Recycler — grant when each app first asks")
         print("• Ice: arrange which menu-bar icons stay visible (hide native Mullvad/Tailscale)")
         print("• SSH keys + ~/.ssh/config (e.g. the 'dino' host) — restore from backup")
-        print("• App Store apps (full Xcode is only needed for ThemeToggle)")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
             print("  sudo ln -sf '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code' /usr/local/bin/code")
@@ -1095,13 +799,11 @@ DAYS_TO_KEEP={days_to_keep}
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
-            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder", self.install_menu_bar_apps),
-            ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state", self.install_vpn_dns_agent),
+            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, Media Tracking Killer, Download Recycler", self.install_menu_bar_apps),
+            ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
+            ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
+            ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),
             ("Code catalog", "~/Code PROJECTS.md watcher + proj/list helpers", self.install_code_catalog),
-            ("MOV Watcher", "Auto-convert Downloads/*.mov to .mp4", self.setup_mov_watcher),
-            ("Dark Mode Toggle", "ThemeToggle menu bar app (requires full Xcode)", self.install_dark_mode_toggle),
-            ("Apple Media Tracking Killer", "Legacy: background process to disable media tracking", self.setup_kill_apple_media_tracking),
-            ("Download Recycler", "Legacy: auto-clean old files from Downloads folder", self.setup_download_recycler),
         ]
     
     def display_checkbox_menu(self):

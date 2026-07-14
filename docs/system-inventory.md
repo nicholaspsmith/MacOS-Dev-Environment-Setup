@@ -19,6 +19,8 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | Battery Time.app | battery-time-menubar | |
 | KeyLight.app | keylight-menubar | needs Accessibility (manual grant) |
 | MacRecorder.app | MacRecorder | needs Screen Recording (manual grant) |
+| Media Tracking Killer.app | media-tracking-killer-menubar | added 2026-07-14; replaces killapplemediatracking.sh |
+| Download Recycler.app | download-recycler-menubar | added 2026-07-14; replaces download_recycler.sh; needs Downloads access (manual grant) |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
 | (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
 
@@ -32,12 +34,12 @@ survive rebuilds.
 |---|---|---|
 | com.nicholassmith.mullvad-tailscale-dns | **automated** | vpn-dns-menubar repo (DNS watcher) |
 | com.nicholassmith.code-catalog | **automated** | this repo (`local_bin/code-catalog-*`) |
-| com.nicholassmith.mov-watcher | **automated** | this repo (`background_scripts/mov_watcher.sh`) — new label; was not previously installed |
+| com.nicholassmith.mov-watcher | removed | MOV→MP4 watcher component was dropped 2026-07-14 (never installed anywhere) |
 | com.nicholassmith.battery-time-power-watch | **retired by setup** | SwiftBar-era; superseded by the Swift app's in-process IOKit watcher (`main.swift`). The menu-bar suite component boots it out and deletes its plist when it finds one |
 | com.nicholassmith.godot-headless-reaper | not reproduced | machine-specific (`~/.local/bin/godot-headless-reaper`) |
 | com.nicholassmith.networkscan / networkscan-server | not reproduced | project-specific (`~/Code/networkscan`, github: Network-Scan-Web-UI) |
-| com.user.killapplemediatracking | optional component | in repo; was NOT installed on the audited machine |
-| com.user.downloadrecycler | optional component | in repo; was NOT installed on the audited machine |
+| com.user.killapplemediatracking | **retired by setup** | replaced by Media Tracking Killer.app (menu-bar suite); suite step boots it out if found |
+| com.user.downloadrecycler | **retired by setup** | replaced by Download Recycler.app (menu-bar suite); suite step boots it out if found |
 
 ## `~/.local/bin` (beyond what installers create)
 
@@ -76,5 +78,8 @@ survive rebuilds.
 - BetterTouchTool quarantined in `~/.disabled-apps` (replaced by KeyLight).
 - Ice (`jordanbaird-ice@beta`) hides the native Mullvad/Tailscale icons;
   its layout is configured by hand.
-- ThemeToggle.app (this repo's dark/light toggle) was **not** installed on
-  the audited machine; the component remains available and optional.
+- ThemeToggle (this repo's old dark/light toggle) was removed 2026-07-14 —
+  macOS now has a light/dark toggle built into Control Center, and it wasn't
+  installed on the audited machine anyway.
+- Tailscale and Mullvad are individual components (not in the Brewfile) so
+  each machine opts in separately; the VPN/DNS watcher needs both.

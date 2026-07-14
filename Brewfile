@@ -35,8 +35,8 @@ brew "wget"
 brew "zoxide"            # hooked in .zshrc (z <name>)
 
 ## ── Watcher / agent dependencies ────────────────────────────────────────
-brew "fswatch"           # code-catalog + mov_watcher agents
-brew "ffmpeg"            # mov_watcher (MOV → MP4)
+brew "fswatch"           # code-catalog watcher
+brew "ffmpeg"            # general media transcoding
 brew "imagemagick"       # vpn-dns-menubar fallback PNG rebuilds
 
 ## ── Languages & version managers ────────────────────────────────────────
@@ -51,8 +51,8 @@ cask "iterm2"
 cask "visual-studio-code"
 cask "jordanbaird-ice@beta"   # hides native Mullvad/Tailscale icons
 cask "rectangle"              # window manager (until HotkeyKit-based replacement)
-cask "tailscale-app"          # the Mac app, not the standalone CLI
-cask "mullvad-vpn"
+# Tailscale and Mullvad are deliberately NOT here — each is its own optional
+# component in setup_macos_dev.py so you choose per machine.
 
 ## ── Fonts ────────────────────────────────────────────────────────────────
 cask "font-caskaydia-cove-nerd-font"

@@ -52,13 +52,17 @@ on a machine that might not have Homebrew yet.)
 | 10 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 11 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 12 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 13 | Menu-bar app suite | clones + builds ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder into `~/Applications`; retires the legacy battery-time power-watch agent |
-| 14 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state |
-| 15 | Code catalog | `~/Code/PROJECTS.md` watcher + `proj`/`list`/`projects` shell helpers |
-| 16 | MOV Watcher | auto-converts `~/Downloads/*.mov` → `.mp4` |
-| 17 | Dark Mode Toggle | optional ThemeToggle app — the only component needing **full Xcode** |
-| 18 | Media Tracking Killer | legacy optional background script |
-| 19 | Download Recycler | legacy optional: trash old Downloads after N days |
+| 13 | Menu-bar app suite | clones + builds **7 apps** into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar); retires the launchd agents the apps replaced |
+| 14 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
+| 15 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
+| 16 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 14 + 15) |
+| 17 | Code catalog | creates `~/Code` if missing; `PROJECTS.md` watcher + `proj`/`list`/`projects` shell helpers |
+
+The old media-tracking-killer and download-recycler background scripts are now
+full menu-bar apps inside component 13 — each with an on/off toggle, its own
+settings (kill interval / retention days), and Start at Login. The Dark Mode
+Toggle (macOS has this built into Control Center now) and MOV watcher
+components were removed.
 
 Examples:
 
@@ -90,13 +94,14 @@ Then do the things macOS won't let a script do:
 
 - Launch each menu-bar app once (`open ~/Applications`) and grant its
   permission when asked: **Accessibility** for KeyLight, **Screen Recording**
-  for MacRecorder. Enable **Start at Login** from each app's own menu.
-- Sign into **Tailscale** and **Mullvad VPN**, then open **Ice** and hide
-  their native menu-bar icons (VPN & DNS.app is the one dot you keep).
+  for MacRecorder, **Downloads folder** for Download Recycler. Enable
+  **Start at Login** from each app's own menu.
+- If you installed them: sign into **Tailscale** and **Mullvad VPN**, then
+  open **Ice** and hide their native menu-bar icons (VPN & DNS.app is the one
+  dot you keep).
 - iTerm2: the Quake profile is installed; assign its hotkey under
   **Settings ▸ Profiles ▸ Quake ▸ Keys** if it isn't active.
 - Restore SSH keys + `~/.ssh/config` from backup (e.g. the `dino` host).
-- App Store: install full Xcode only if you want component 17 (ThemeToggle).
 
 ## Health checks
 
@@ -105,8 +110,8 @@ launchctl list | grep nicholassmith        # custom agents loaded?
 brew bundle check --file=Brewfile          # Brewfile satisfied?
 gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
-tail -5 ~/Library/Logs/code-catalog.log    # catalog watcher alive?
-tail -5 ~/Library/Logs/mov-converter.log   # MOV watcher alive?
+tail -5 ~/Library/Logs/code-catalog.log         # catalog watcher alive?
+tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail
 ```
 
 Repair anything by re-running its component (`--select N`), or re-run the
@@ -122,8 +127,6 @@ zsh/.zshrc              shell config (genericized from the live machine)
 iterm_profiles/         iTerm2 dynamic profile(s)
 vscode/extensions.txt   VS Code extension set
 local_bin/              code-catalog scripts installed to ~/.local/bin
-background_scripts/     mov_watcher, media-tracking killer, download recycler
-mac_light_dark_toggle/  ThemeToggle Xcode project
 docs/                   system inventory + design specs
 ```
 
