@@ -1,74 +1,78 @@
-# Usage
+# macOS Dev Environment Setup
 
-## Prerequisites
-If you wan't to install the dark/light theme switcher, you'll need to have XCode installed:
-[Install XCode](https://apps.apple.com/us/app/xcode/id497799835?mt=12)
+Reproduces my full development environment on a fresh Mac (Apple Silicon,
+macOS 15+, tested on macOS 26 Tahoe): Homebrew toolchain, zsh config, iTerm2,
+editors, the custom StatusItemKit menu-bar app suite, and the launchd agents
+that keep everything running.
 
-## Interactive mode (default)
-`python3 setup_macos_dev.py`
+## Quick start (brand-new Mac)
 
-## Install everything automatically
-`python3 setup_macos_dev.py --all --no-confirm`
+```sh
+git clone https://github.com/nicholaspsmith/MacOS-Dev-Environment-Setup.git
+cd MacOS-Dev-Environment-Setup
+./bootstrap.sh --all --no-confirm
+```
 
-## Install only specific components
-`python3 setup_macos_dev.py --select 1,2,6,9`
+`bootstrap.sh` installs Xcode Command Line Tools and Homebrew, then runs the
+Python orchestrator. `--all --no-confirm` is fully unattended: anything that
+needs a human (GitHub login, TCC permission dialogs) is skipped and listed in
+the summary as follow-up.
 
-## List available components
-`python3 setup_macos_dev.py --list`
+### Other modes
 
+```sh
+./bootstrap.sh                 # interactive checkbox menu
+python3 setup_macos_dev.py --list          # list components
+python3 setup_macos_dev.py --select 1,2,5  # install specific components
+```
 
-# Complete Feature List:
-## ✅ Core Tools:
-- Homebrew installation
-- Python (via Homebrew) with alias python → python3
-- Node.js installation
-- ZSH shell setup (default on macOS 15+)
+Every component is idempotent — re-running is safe.
 
-## ✅ iTerm2 Setup:
+## Components
 
-- Installs iTerm2 via Homebrew
-- Creates custom hotkey profile with:
-  - Hotkey: Ctrl+Q (^q)
-  - Opacity: 10% (90% transparency)
-  - Animations: Enabled for show/hide
-  - System-wide hotkey window functionality
+| Component | What it does |
+|---|---|
+| Homebrew | installs brew itself |
+| Brew Bundle | `Brewfile` — curated CLI tools (fd, ripgrep, fzf, zoxide, direnv, neovim, fswatch, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts. Heavier stacks (docker, DBs, qemu, audio) are in the file but commented out |
+| ZSH / Oh My Zsh | ensures zsh default, installs oh-my-zsh |
+| Copy .zshrc | installs `zsh/.zshrc` (backs up the old one) and clones `fzf-git.sh` |
+| NVM & Node LTS | Homebrew nvm (lazy-loaded by the .zshrc) + Node LTS |
+| iTerm2 Quake profile | installs `iterm_profiles/Quake.json` as a dynamic profile |
+| Claude Code | native installer (`~/.local/bin/claude`), brew cask fallback |
+| VS Code + extensions | installs the editor and the extension set in `vscode/extensions.txt` |
+| GitHub CLI & git config | gh, git identity, git-lfs; separate interactive auth step wires `gh` as the git credential helper |
+| Menu-bar app suite | clones StatusItemKit + HotkeyKit + 5 app repos side-by-side in `~/Code` (local SPM path deps), sets up the stable signing identity, builds each app, symlinks into `~/Applications` |
+| VPN/DNS watcher agent | launchd agent from vpn-dns-menubar: toggles Tailscale `accept-dns` with Mullvad state |
+| Code catalog | `~/Code/PROJECTS.md` watcher agent + `proj`/`list`/`projects` shell helpers |
+| MOV Watcher | auto-converts `~/Downloads/*.mov` to `.mp4` (fswatch + ffmpeg) |
+| Dark Mode Toggle | optional ThemeToggle menu-bar app — the only component that needs **full Xcode** ([App Store](https://apps.apple.com/us/app/xcode/id497799835?mt=12)) |
+| Media Tracking Killer / Download Recycler | legacy optional background scripts |
 
-## ✅ Claude Code:
-- Installs via Homebrew cask (with official installer fallback)
-- Ready for terminal use
+## What can't be automated
 
-## ✅ VS Code Configuration:
+macOS and third parties require a human for:
 
-- Installs VS Code via Homebrew
-- Adds code command to PATH
-- Uninstalls: GitHub Copilot & GitHub Copilot Chat extensions
-- Installs:
-  - Claude Code extension (anthropic.claude-code)
-  - Python extension (ms-python.python)
+- **TCC permissions** — Accessibility (KeyLight), Screen Recording (MacRecorder),
+  System Events (ThemeToggle): grant when each app first asks
+- **Logins** — `gh auth login`, Tailscale, Mullvad, App Store
+- **Ice menu-bar layout** — hide the native Mullvad/Tailscale icons by hand
+- **SSH keys / `~/.ssh/config`** — restore from backup (e.g. the `dino` host)
+- **Start at Login** for the menu-bar apps — toggle inside each app's menu (SMAppService)
 
-## ✅ GitHub CLI:
-- Installs GitHub CLI via Homebrew
-- Interactive authentication setup
-- Opens browser to GitHub sign-in page
-- Guides user through authentication process
+See `docs/system-inventory.md` for the full audit of the reference machine,
+including what was deliberately left out and why.
 
-# Key Features:
-## 🔧 Smart Setup:
-- macOS 15+ compatibility check
-- Automatic shell profile detection (zsh/bash)
-- PATH management for current session
-- Error handling with detailed logging
+## Repo layout
 
-## 📊 Progress Tracking:
-- Step-by-step progress reports
-- Success/failure tracking
-- Comprehensive summary at completion
-- Next steps guidance
-
-## 🛠️ User Experience:
-- Interactive confirmation before starting
-- Clear progress indicators
-- Detailed manual configuration guide
-- Troubleshooting information
-
-After completion, you'll have a fully configured development environment ready for Python, Node.js, and AI-assisted coding with Claude!
+```
+bootstrap.sh            cold-start entry point (CLT + Homebrew + orchestrator)
+setup_macos_dev.py      component-based orchestrator
+Brewfile                curated package manifest
+zsh/.zshrc              shell config (genericized from the live machine)
+iterm_profiles/         iTerm2 dynamic profile(s)
+vscode/extensions.txt   VS Code extension set
+local_bin/              code-catalog scripts installed to ~/.local/bin
+background_scripts/     mov_watcher, media-tracking killer, download recycler
+mac_light_dark_toggle/  ThemeToggle Xcode project
+docs/                   system inventory + design specs
+```

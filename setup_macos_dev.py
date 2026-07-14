@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 Complete macOS Development Environment Setup
-Automatically installs and configures a full development environment on macOS 15+
+Automatically installs and configures a full development environment on
+macOS 15+ (tested on macOS 26 Tahoe, Apple Silicon).
+
+Run via ./bootstrap.sh on a fresh machine (installs CLT + Homebrew first).
 """
 
 import subprocess
@@ -11,19 +14,38 @@ import platform
 import shutil
 import json
 import webbrowser
-import time
 import plistlib
 import curses
 import argparse
 from pathlib import Path
 
+# Personal repos that make up the menu-bar app suite. The apps depend on the
+# frameworks via local `../` SPM paths, so everything must be cloned
+# side-by-side under ~/Code before building.
+FRAMEWORK_REPOS = [
+    ('StatusItemKit', 'https://github.com/nicholaspsmith/StatusItemKit.git'),
+    ('HotkeyKit', 'https://github.com/nicholaspsmith/HotkeyKit.git'),
+]
+MENU_BAR_APP_REPOS = [
+    ('MacOS_Process_Monitor', 'https://github.com/nicholaspsmith/MacOS_Process_Monitor.git', 'ProcessMonitor.app'),
+    ('vpn-dns-menubar', 'https://github.com/nicholaspsmith/vpn-dns-menubar.git', 'VPN & DNS.app'),
+    ('battery-time-menubar', 'https://github.com/nicholaspsmith/battery-time-menubar.git', 'Battery Time.app'),
+    ('keylight-menubar', 'https://github.com/nicholaspsmith/keylight-menubar.git', 'KeyLight.app'),
+    ('MacRecorder', 'https://github.com/nicholaspsmith/MacRecorder.git', 'MacRecorder.app'),
+]
+
+GIT_USER_NAME = 'nicholaspsmith'
+GIT_USER_EMAIL = 'npsmith1990@gmail.com'
+
+
 class MacOSDevSetup:
-    def __init__(self):
+    def __init__(self, no_confirm=False):
         self.system = platform.system()
         self.macos_version = None
         if self.system == "Darwin":
             self.macos_version = platform.mac_ver()[0]
-        
+
+        self.no_confirm = no_confirm
         self.shell_profile = self.get_shell_profile_path()
         self.success_items = []
         self.failed_items = []
@@ -78,7 +100,64 @@ class MacOSDevSetup:
     def add_failure(self, item):
         self.failed_items.append(item)
         print(f"❌ {item}")
-    
+
+    def ask_yes_no(self, prompt, default=False):
+        """Prompt the user, honoring --no-confirm (returns default without touching stdin)"""
+        if self.no_confirm:
+            return default
+        return input(prompt).lower().strip() in ['y', 'yes']
+
+    def load_launch_agent(self, plist_file, label):
+        """(Re)load a LaunchAgent via bootstrap, falling back to legacy load -w"""
+        uid = os.getuid()
+        self.run_command(f'launchctl bootout gui/{uid}/{label}', shell=True, check=False)
+        result = self.run_command(f'launchctl bootstrap gui/{uid} "{plist_file}"',
+                                  shell=True, check=False)
+        if result and result.returncode == 0:
+            return True
+        result = self.run_command(f'launchctl load -w "{plist_file}"', shell=True, check=False)
+        return bool(result and result.returncode == 0)
+
+    def clone_or_update_repo(self, url, dest):
+        """Clone a repo, or fast-forward it if already present.
+
+        Returns 'cloned', 'updated', or 'unchanged' (all truthy) on success,
+        False on failure."""
+        dest = Path(dest)
+        if (dest / '.git').exists():
+            result = self.run_command(f'git -C "{dest}" pull --ff-only', shell=True, check=False)
+            if result and result.returncode == 0:
+                return 'unchanged' if 'Already up to date' in (result.stdout or '') else 'updated'
+            print(f"⚠️  Could not update {dest.name} (offline or diverged) — using existing checkout")
+            return 'unchanged'
+        if dest.exists() and any(dest.iterdir()):
+            print(f"❌ {dest} exists but is not a git repo — move it aside and re-run")
+            return False
+        result = self.run_command(f'git clone "{url}" "{dest}"', shell=True, check=False)
+        return 'cloned' if result and result.returncode == 0 else False
+
+    def install_launch_agent(self, label, program_args, log_name, extra=None):
+        """Write a KeepAlive LaunchAgent plist and (re)load it. Returns True if loaded now."""
+        logs_dir = Path.home() / 'Library' / 'Logs'
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        launch_agents = Path.home() / 'Library' / 'LaunchAgents'
+        launch_agents.mkdir(parents=True, exist_ok=True)
+        plist = {
+            'Label': label,
+            'ProgramArguments': [str(a) for a in program_args],
+            'EnvironmentVariables': {'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin'},
+            'RunAtLoad': True,
+            'KeepAlive': True,
+            'StandardOutPath': str(logs_dir / log_name),
+            'StandardErrorPath': str(logs_dir / log_name),
+        }
+        if extra:
+            plist.update(extra)
+        plist_file = launch_agents / f'{label}.plist'
+        with open(plist_file, 'wb') as f:
+            plistlib.dump(plist, f)
+        return self.load_launch_agent(plist_file, label)
+
     def install_homebrew(self):
         """Install Homebrew"""
         if shutil.which('brew'):
@@ -102,34 +181,24 @@ class MacOSDevSetup:
             self.add_failure("Homebrew installation failed")
             return False
     
-    def install_python_via_homebrew(self):
-        """Install Python via Homebrew and set up alias"""
-        print("📦 Installing Python via Homebrew...")
-        
-        result = self.run_command('brew install python')
-        if not result:
-            self.add_failure("Python installation failed")
+    def install_brew_bundle(self):
+        """Install the curated Brewfile (CLI tools, casks, fonts)"""
+        print("📦 Installing Brewfile (this can take a while on a fresh machine)...")
+
+        brewfile = Path(__file__).parent / 'Brewfile'
+        if not brewfile.exists():
+            self.add_failure("Brewfile not found next to setup script")
             return False
-        
-        # Add python alias to shell profile
-        try:
-            alias_line = 'alias python="python3"\n'
-            with open(self.shell_profile, 'a') as f:
-                # Check if alias already exists
-                existing_content = ""
-                if self.shell_profile.exists():
-                    with open(self.shell_profile, 'r') as rf:
-                        existing_content = rf.read()
-                
-                if 'alias python="python3"' not in existing_content:
-                    f.write(alias_line)
-            
-            self.add_success("Python installed and alias configured")
+
+        result = self.run_command(f'brew bundle --file="{brewfile}"',
+                                  shell=True, capture_output=False, check=False)
+        if result and result.returncode == 0:
+            self.add_success("Brewfile installed (CLI tools, casks, fonts)")
             return True
-        except Exception as e:
-            print(f"Warning: Could not set Python alias: {e}")
-            self.add_success("Python installed (alias setup failed)")
-            return True
+
+        # brew bundle exits non-zero if any single entry failed; report but continue
+        self.add_failure("Brewfile completed with errors (run 'brew bundle --file=Brewfile' to retry)")
+        return False
     
     def install_oh_my_zsh(self):
         """Install Oh My Zsh"""
@@ -153,144 +222,112 @@ class MacOSDevSetup:
             return False
         
     def copy_zshrc(self):
-        """Copy .zshrc from local zsh directory to user's home directory"""
+        """Copy .zshrc into place and clone fzf-git.sh, which it sources"""
         source_zshrc = Path(__file__).parent / 'zsh' / '.zshrc'
         dest_zshrc = Path.home() / '.zshrc'
-        
+
         try:
             # Check if source file exists
             if not source_zshrc.exists():
                 self.add_failure(f".zshrc file not found at {source_zshrc}")
                 return False
-            
+
             # Backup existing .zshrc if it exists
             if dest_zshrc.exists():
                 backup_path = dest_zshrc.with_suffix('.zshrc.backup')
                 shutil.copy2(dest_zshrc, backup_path)
                 print(f"Backed up existing .zshrc to {backup_path}")
-            
+
             # Copy the new .zshrc
             shutil.copy2(source_zshrc, dest_zshrc)
             self.add_success(f".zshrc copied to {dest_zshrc}")
-            return True
-            
         except Exception as e:
             self.add_failure(f"Failed to copy .zshrc: {e}")
             return False
 
+        # .zshrc sources ~/Code/fzf-git.sh/fzf-git.sh (guarded, but clone it so it works)
+        fzf_git_dir = Path.home() / 'Code' / 'fzf-git.sh'
+        fzf_git_dir.parent.mkdir(parents=True, exist_ok=True)
+        if self.clone_or_update_repo('https://github.com/junegunn/fzf-git.sh.git', fzf_git_dir):
+            self.add_success("fzf-git.sh cloned")
+        else:
+            self.add_failure("fzf-git.sh clone failed (fzf git bindings unavailable)")
+        return True
 
-    
     def install_nvm(self):
-        """Install NVM (Node Version Manager)"""
-        print("📦 Installing NVM (Node Version Manager)...")
-        
-        # Check if NVM is already installed
-        nvm_dir = Path.home() / '.nvm'
-        if nvm_dir.exists():
-            self.add_success("NVM already installed")
-            return self.setup_nvm_and_node()
-        
-        # Install NVM
-        install_cmd = 'curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
-        result = self.run_command(install_cmd, shell=True, capture_output=False)
-        
-        if result:
-            self.add_success("NVM installed")
-            return self.setup_nvm_and_node()
-        else:
-            self.add_failure("NVM installation failed")
-            return False
-    
-    def setup_nvm_and_node(self):
-        """Setup NVM environment and install Node.js LTS"""
-        print("⚙️ Setting up NVM and installing Node.js LTS...")
-        
-        try:
-            # Add NVM to current session
-            nvm_dir = str(Path.home() / '.nvm')
-            nvm_script = f'{nvm_dir}/nvm.sh'
-            
-            if not os.path.exists(nvm_script):
-                self.add_failure("NVM script not found after installation")
+        """Install NVM via Homebrew (matches .zshrc lazy-loader) and Node.js LTS"""
+        print("📦 Installing NVM via Homebrew...")
+
+        def nvm_script_path():
+            result = self.run_command('brew --prefix nvm', check=False)
+            if result and result.returncode == 0:
+                path = Path(result.stdout.strip()) / 'nvm.sh'
+                if path.exists():
+                    return path
+            return None
+
+        brew_nvm_script = nvm_script_path()
+        if not brew_nvm_script:
+            if not self.run_command('brew install nvm'):
+                self.add_failure("NVM installation failed")
                 return False
-            
-            # Ensure NVM is added to shell profile (NVM installer should do this, but let's be sure)
-            self.ensure_nvm_in_profile(nvm_dir)
-            
-            # Source NVM and install Node LTS
-            setup_commands = [
-                f'export NVM_DIR="{nvm_dir}"',
-                f'[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"',
-                'nvm install --lts',
-                'nvm use --lts',
-                'nvm alias default lts/*'
-            ]
-            
-            combined_cmd = ' && '.join(setup_commands)
-            result = self.run_command(combined_cmd, shell=True, capture_output=False)
-            
-            if result:
-                # Verify Node.js is available
-                node_check = self.run_command('bash -c "source ~/.nvm/nvm.sh && node --version"', shell=True)
-                if node_check:
-                    self.add_success(f"Node.js LTS installed via NVM")
-                    return True
-            
-            # If the above failed, try a simpler approach
-            print("Trying alternative NVM setup...")
-            fallback_cmd = f'bash -c "export NVM_DIR={nvm_dir} && source {nvm_script} && nvm install --lts && nvm use --lts"'
-            fallback_result = self.run_command(fallback_cmd, shell=True, capture_output=False)
-            
-            if fallback_result:
-                self.add_success("Node.js LTS installed via NVM (fallback method)")
-                return True
-            
-            self.add_failure("Node.js installation via NVM failed")
+            brew_nvm_script = nvm_script_path()
+        if not brew_nvm_script:
+            self.add_failure("NVM script not found after brew install")
             return False
-            
-        except Exception as e:
-            print(f"Error setting up NVM: {e}")
-            self.add_failure(f"NVM setup failed: {e}")
-            return False
-    
-    def ensure_nvm_in_profile(self, nvm_dir):
-        """Ensure NVM is properly configured in shell profile"""
-        nvm_lines = [
-            f'export NVM_DIR="{nvm_dir}"',
-            '[ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh"  # This loads nvm',
-            '[ -s "$NVM_DIR/bash_completion" ] && \\. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion'
-        ]
-        
-        try:
-            existing_content = ""
-            if self.shell_profile.exists():
-                with open(self.shell_profile, 'r') as f:
-                    existing_content = f.read()
-            
-            lines_to_add = []
-            for line in nvm_lines:
-                if line not in existing_content and 'NVM_DIR' not in existing_content:
-                    lines_to_add.append(line)
-            
-            if lines_to_add:
-                with open(self.shell_profile, 'a') as f:
-                    f.write('\n# NVM Configuration\n')
-                    f.write('\n'.join(lines_to_add))
-                    f.write('\n')
-                print("Added NVM configuration to shell profile")
-                
-        except Exception as e:
-            print(f"Warning: Could not update shell profile for NVM: {e}")
-    
-    def install_iterm(self):
-        """Install iTerm2 via Homebrew"""
-        print("📦 Installing iTerm2...")
-        result = self.run_command('brew install --cask iterm2')
-        if result:
-            self.add_success("iTerm2 installed")
+
+        (Path.home() / '.nvm').mkdir(exist_ok=True)
+
+        # The repo .zshrc lazy-loads brew's nvm. If the user kept their own
+        # profile (didn't run the Copy .zshrc component), wire nvm up there.
+        profile_text = self.shell_profile.read_text() if self.shell_profile.exists() else ''
+        if 'nvm.sh' not in profile_text and '_load_nvm' not in profile_text:
+            self.add_to_shell_profile(
+                f'export NVM_DIR="$HOME/.nvm"\n[ -s "{brew_nvm_script}" ] && \\. "{brew_nvm_script}"')
+            print("Added NVM sourcing to shell profile")
+
+        print("⚙️ Installing Node.js LTS via NVM...")
+        node_cmd = (f'bash -c \'export NVM_DIR="$HOME/.nvm" && source "{brew_nvm_script}" '
+                    f'&& nvm install --lts && nvm alias default "lts/*"\'')
+        result = self.run_command(node_cmd, shell=True, capture_output=False, check=False)
+        if result and result.returncode == 0:
+            self.add_success("NVM (Homebrew) and Node.js LTS installed")
             return True
-        else:
-            self.add_failure("iTerm2 installation failed")
+        self.add_failure("Node.js installation via NVM failed")
+        return False
+
+    def install_iterm_profile(self):
+        """Install iTerm2 (if missing) and the Quake hotkey dynamic profile"""
+        print("⚙️ Installing iTerm2 'Quake' dynamic profile...")
+
+        # Keep the component self-sufficient when Brew Bundle wasn't selected
+        if not Path('/Applications/iTerm.app').exists():
+            print("📦 iTerm2 not found — installing cask...")
+            if not self.run_command('brew install --cask iterm2'):
+                self.add_failure("iTerm2 installation failed")
+                return False
+
+        source_profile = Path(__file__).parent / 'iterm_profiles' / 'Quake.json'
+        if not source_profile.exists():
+            self.add_failure("iterm_profiles/Quake.json not found")
+            return False
+
+        try:
+            with open(source_profile) as f:
+                profile = json.load(f)
+
+            dynamic_dir = Path.home() / 'Library' / 'Application Support' / 'iTerm2' / 'DynamicProfiles'
+            dynamic_dir.mkdir(parents=True, exist_ok=True)
+
+            # Dynamic profiles must be wrapped in a {"Profiles": [...]} envelope
+            with open(dynamic_dir / 'Quake.json', 'w') as f:
+                json.dump({"Profiles": [profile]}, f, indent=2)
+
+            self.add_success("iTerm2 Quake profile installed (DynamicProfiles)")
+            print("💡 Assign the hotkey under iTerm2 ▸ Settings ▸ Profiles ▸ Quake ▸ Keys if not active")
+            return True
+        except Exception as e:
+            self.add_failure(f"iTerm2 profile installation failed: {e}")
             return False
     
     # NOTE!
@@ -320,22 +357,30 @@ class MacOSDevSetup:
             return False
     
     def install_claude_code(self):
-        """Install Claude Code"""
+        """Install Claude Code (native installer, matching the audited machine)"""
         print("📦 Installing Claude Code...")
-        
-        # Try Homebrew cask first
+
+        if shutil.which('claude') or (Path.home() / '.local' / 'bin' / 'claude').exists():
+            self.add_success("Claude Code already installed")
+            return True
+
+        # Official native installer (installs to ~/.local/bin/claude, self-updates).
+        # pipefail so a failed curl can't read as success, then verify the binary.
+        result = self.run_command(
+            "bash -o pipefail -c 'curl -fsSL https://claude.ai/install.sh | bash'",
+            shell=True, capture_output=False, check=False)
+        if (result and result.returncode == 0
+                and (shutil.which('claude') or (Path.home() / '.local' / 'bin' / 'claude').exists())):
+            self.add_success("Claude Code installed via official installer")
+            return True
+
+        # Homebrew cask as fallback
+        print("📦 Trying Homebrew cask fallback...")
         result = self.run_command('brew install --cask claude-code')
         if result:
             self.add_success("Claude Code installed via Homebrew")
             return True
-        
-        # Try official installer as fallback
-        print("📦 Trying official Claude Code installer...")
-        result = self.run_command('curl -fsSL https://claude.ai/install.sh | bash', shell=True, capture_output=False)
-        if result:
-            self.add_success("Claude Code installed via official installer")
-            return True
-        
+
         self.add_failure("Claude Code installation failed")
         return False
     
@@ -491,15 +536,7 @@ class MacOSDevSetup:
             print(f"Created LaunchAgent at {plist_file}")
             
             # Load the LaunchAgent
-            load_result = self.run_command(f'launchctl load {plist_file}', check=False)
-            
-            # Check if it's already loaded (which would cause an error)
-            if load_result is None or (load_result and 'already loaded' in load_result.stderr.lower()):
-                # Try unloading first then loading again
-                self.run_command(f'launchctl unload {plist_file}', check=False)
-                load_result = self.run_command(f'launchctl load {plist_file}')
-            
-            if load_result:
+            if self.load_launch_agent(plist_file, 'com.user.killapplemediatracking'):
                 self.add_success("Apple media tracking killer script installed and started")
                 print("The script will run continuously in the background and restart on login")
                 return True
@@ -541,29 +578,31 @@ class MacOSDevSetup:
             
             # Create or update config file
             if not config_file.exists():
-                # Ask user for the number of days
-                print("\n" + "="*50)
-                print("Download Recycler Configuration")
-                print("="*50)
-                print("Files in your Downloads folder older than the specified")
-                print("number of days will be automatically moved to Trash.")
-                print("(You can change this later by editing ~/background_scripts/download_recycler.conf)")
-                print()
-                
-                while True:
-                    try:
-                        days_input = input("Enter number of days to keep downloads (default: 30): ").strip()
-                        if days_input == "":
-                            days_to_keep = 30
+                days_to_keep = 30
+                if not self.no_confirm:
+                    # Ask user for the number of days
+                    print("\n" + "="*50)
+                    print("Download Recycler Configuration")
+                    print("="*50)
+                    print("Files in your Downloads folder older than the specified")
+                    print("number of days will be automatically moved to Trash.")
+                    print("(You can change this later by editing ~/background_scripts/download_recycler.conf)")
+                    print()
+
+                    while True:
+                        try:
+                            days_input = input("Enter number of days to keep downloads (default: 30): ").strip()
+                            if days_input == "":
+                                days_to_keep = 30
+                                break
+                            days_to_keep = int(days_input)
+                            if days_to_keep < 1:
+                                print("Please enter a positive number.")
+                                continue
                             break
-                        days_to_keep = int(days_input)
-                        if days_to_keep < 1:
-                            print("Please enter a positive number.")
+                        except ValueError:
+                            print("Please enter a valid number.")
                             continue
-                        break
-                    except ValueError:
-                        print("Please enter a valid number.")
-                        continue
                 
                 # Write config file
                 config_content = f"""# Download Recycler Configuration
@@ -616,15 +655,7 @@ DAYS_TO_KEEP={days_to_keep}
             print(f"Created LaunchAgent at {plist_file}")
             
             # Load the LaunchAgent
-            load_result = self.run_command(f'launchctl load {plist_file}', check=False)
-            
-            # Check if it's already loaded (which would cause an error)
-            if load_result is None or (load_result and 'already loaded' in load_result.stderr.lower()):
-                # Try unloading first then loading again
-                self.run_command(f'launchctl unload {plist_file}', check=False)
-                load_result = self.run_command(f'launchctl load {plist_file}')
-            
-            if load_result:
+            if self.load_launch_agent(plist_file, 'com.user.downloadrecycler'):
                 self.add_success("Download Recycler installed and scheduled (runs daily at 9:00 AM)")
                 print(f"Log file: ~/background_scripts/download_recycler.log")
                 print(f"Config file: ~/background_scripts/download_recycler.conf")
@@ -651,62 +682,55 @@ DAYS_TO_KEEP={days_to_keep}
             self.add_failure("VS Code extensions (code command not available)")
             return False
         
-        # Wait a moment for VS Code to be ready
-        time.sleep(2)
-        
-        extensions_success = []
-        extensions_failed = []
-        
-        # Install desired extensions
-        desired_extensions = [
-            ('anthropic.claude-code', 'Claude Code for VS Code'),
-            ('ms-python.python', 'Python extension'),
-        ]
-        
-        print("📦 Installing extensions...")
-        for ext_id, ext_name in desired_extensions:
-            print(f"Installing {ext_name}...")
-            
-            # First check if already installed
-            list_result = self.run_command('code --list-extensions')
-            if list_result and ext_id in list_result.stdout:
-                extensions_success.append(f"{ext_name} (already installed)")
+        # Extension list captured from the audited machine (vscode/extensions.txt)
+        extensions_file = Path(__file__).parent / 'vscode' / 'extensions.txt'
+        if not extensions_file.exists():
+            self.add_failure("vscode/extensions.txt not found")
+            return False
+
+        desired_extensions = [line.strip() for line in extensions_file.read_text().splitlines()
+                              if line.strip() and not line.startswith('#')]
+
+        list_result = self.run_command('code --list-extensions')
+        already_installed = set(list_result.stdout.split()) if list_result else set()
+
+        installed, failed = 0, []
+        print(f"📦 Installing {len(desired_extensions)} extensions from vscode/extensions.txt...")
+        for ext_id in desired_extensions:
+            if ext_id in already_installed:
+                installed += 1
                 continue
-            
-            # Try to install
-            result = self.run_command(f'code --install-extension {ext_id}')
-            if result:
-                # Verify installation
-                verify_result = self.run_command('code --list-extensions')
-                if verify_result and ext_id in verify_result.stdout:
-                    extensions_success.append(f"Installed {ext_name}")
-                else:
-                    extensions_failed.append(f"Installation verification failed for {ext_name}")
+            result = self.run_command(f'code --install-extension {ext_id}', check=False)
+            if result and result.returncode == 0:
+                installed += 1
             else:
-                extensions_failed.append(f"Failed to install {ext_name}")
-        
-        # Report results
-        if extensions_success:
-            success_msg = f"VS Code extensions: {', '.join(extensions_success)}"
-            self.add_success(success_msg)
-        
-        if extensions_failed:
-            failure_msg = f"Some VS Code extensions failed: {', '.join(extensions_failed)}"
-            self.add_failure(failure_msg)
+                failed.append(ext_id)
+
+        if installed:
+            self.add_success(f"VS Code extensions: {installed}/{len(desired_extensions)} installed")
+        if failed:
+            self.add_failure(f"VS Code extensions failed: {', '.join(failed)}")
             print("💡 You can manually install failed extensions from VS Code's Extensions panel")
-        
-        return len(extensions_failed) == 0
-    
+
+        return len(failed) == 0
+
     def install_github_cli(self):
-        """Install GitHub CLI"""
+        """Install GitHub CLI and configure git identity, LFS, and credential helper"""
         print("📦 Installing GitHub CLI...")
-        result = self.run_command('brew install gh')
-        if result:
+        if shutil.which('gh'):
+            self.add_success("GitHub CLI already installed")
+        elif self.run_command('brew install gh'):
             self.add_success("GitHub CLI installed")
-            return True
         else:
             self.add_failure("GitHub CLI installation failed")
             return False
+
+        print("⚙️ Configuring git...")
+        self.run_command(f'git config --global user.name "{GIT_USER_NAME}"', shell=True, check=False)
+        self.run_command(f'git config --global user.email "{GIT_USER_EMAIL}"', shell=True, check=False)
+        lfs = self.run_command('git lfs install', check=False)
+        self.add_success(f"git configured (user.name={GIT_USER_NAME}, LFS {'enabled' if lfs and lfs.returncode == 0 else 'skipped'})")
+        return True
     
     def install_dark_mode_toggle(self):
         """Build and install ThemeToggle - a custom menu bar app for toggling dark mode"""
@@ -792,15 +816,13 @@ DAYS_TO_KEEP={days_to_keep}
             print("   Please grant this permission for the app to work properly")
             
             # Optionally launch ThemeToggle
-            launch = input("\nWould you like to launch ThemeToggle now? (y/n): ").lower().strip()
-            if launch in ['y', 'yes']:
+            if self.ask_yes_no("\nWould you like to launch ThemeToggle now? (y/n): "):
                 self.run_command(f'open "{themetoggle_app}"', shell=True, check=False)
                 print("ThemeToggle launched - check your menu bar!")
                 print("If prompted, please grant permission to control System Events")
-            
+
             # Add to login items
-            add_login = input("\nWould you like ThemeToggle to start automatically at login? (y/n): ").lower().strip()
-            if add_login in ['y', 'yes']:
+            if self.ask_yes_no("\nWould you like ThemeToggle to start automatically at login? (y/n): "):
                 # Use osascript to add to login items
                 add_login_cmd = f'''osascript -e 'tell application "System Events" to make login item at end with properties {{path:"{themetoggle_app}", hidden:false}}' '''
                 self.run_command(add_login_cmd, shell=True, check=False)
@@ -814,33 +836,207 @@ DAYS_TO_KEEP={days_to_keep}
             return False
     
     def setup_github_cli(self):
-        """Prompt user to sign into GitHub CLI and open browser"""
+        """Prompt user to sign into GitHub CLI and wire it as git credential helper"""
         print("🔐 Setting up GitHub CLI authentication...")
-        
+
+        # Already authenticated? Just make sure the credential helper is wired.
+        status = self.run_command('gh auth status', check=False)
+        if status and status.returncode == 0:
+            self.run_command('gh auth setup-git', check=False)
+            self.add_success("GitHub CLI already authenticated (credential helper wired)")
+            return True
+
+        if self.no_confirm:
+            self.add_success("GitHub CLI auth skipped in unattended mode (run 'gh auth login && gh auth setup-git' later)")
+            return True
+
         print("\n" + "="*50)
         print("GitHub CLI Authentication Required")
         print("="*50)
         print("You will now be prompted to authenticate with GitHub.")
         print("This will open a browser window to GitHub's sign-in page.")
-        
+
         # Open GitHub sign-in page
         print("🌐 Opening GitHub sign-in page in browser...")
         webbrowser.open('https://github.com/login')
-        
+
         # Prompt user
         input("\nPress Enter when ready to continue with GitHub CLI authentication...")
-        
+
         # Start GitHub CLI authentication
         print("Starting GitHub CLI authentication...")
         result = self.run_command('gh auth login', capture_output=False)
-        
+
         if result is not None:
+            self.run_command('gh auth setup-git', check=False)
             self.add_success("GitHub CLI authentication completed")
             return True
         else:
             self.add_failure("GitHub CLI authentication failed")
             return False
     
+    def install_menu_bar_apps(self):
+        """Clone, build, and link the StatusItemKit menu-bar app suite"""
+        print("📦 Installing menu-bar app suite (StatusItemKit apps)...")
+
+        code_dir = Path.home() / 'Code'
+        code_dir.mkdir(exist_ok=True)
+        apps_dir = Path.home() / 'Applications'
+        apps_dir.mkdir(exist_ok=True)
+
+        # Frameworks first — the apps reference them as local ../ SPM path deps
+        for name, url in FRAMEWORK_REPOS:
+            if not self.clone_or_update_repo(url, code_dir / name):
+                self.add_failure(f"Menu-bar suite: could not clone {name}")
+                return False
+
+        # Stable self-signed identity so TCC grants survive rebuilds.
+        # The script asks for the login password (tty prompt or GUI dialog),
+        # so it can't run unattended.
+        signing_script = code_dir / 'StatusItemKit' / 'scripts' / 'setup-signing.sh'
+        if self.no_confirm:
+            print("⏭️  Skipping signing identity setup (needs your password). Builds use")
+            print(f"    ad-hoc signing; run {signing_script} later, then re-run this component.")
+        elif signing_script.exists():
+            result = self.run_command(f'bash "{signing_script}"', shell=True,
+                                      capture_output=False, check=False)
+            if not (result and result.returncode == 0):
+                print("⚠️  setup-signing.sh failed; builds fall back to ad-hoc signing "
+                      "(TCC grants reset on every rebuild)")
+
+        # Clone + build each app, symlink into ~/Applications
+        built, failed = [], []
+        for name, url, app_name in MENU_BAR_APP_REPOS:
+            repo = code_dir / name
+            status = self.clone_or_update_repo(url, repo)
+            if not status:
+                failed.append(f"{name} (clone)")
+                continue
+            built_app = repo / 'build' / app_name
+            if status == 'unchanged' and built_app.exists():
+                # Source didn't move and a build exists — skip the rebuild
+                self.run_command(f'ln -sfn "{built_app}" "{apps_dir / app_name}"',
+                                 shell=True, check=False)
+                built.append(f"{app_name} (up to date)")
+                continue
+            build_script = repo / 'scripts' / 'build-app.sh'
+            if not build_script.exists():
+                failed.append(f"{name} (no scripts/build-app.sh)")
+                continue
+            print(f"🔨 Building {app_name}...")
+            result = self.run_command(f'bash "{build_script}"', shell=True,
+                                      capture_output=False, check=False)
+            if not (result and result.returncode == 0 and built_app.exists()):
+                failed.append(f"{name} (build)")
+                continue
+            self.run_command(f'ln -sfn "{built_app}" "{apps_dir / app_name}"',
+                             shell=True, check=False)
+            built.append(app_name)
+
+        if built:
+            self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
+            print("💡 Launch each app once and grant its permissions (KeyLight needs Accessibility);")
+            print("   enable 'Start at Login' from each app's own menu (SMAppService).")
+        if failed:
+            self.add_failure(f"Menu-bar apps failed: {', '.join(failed)}")
+        return not failed
+
+    def install_vpn_dns_agent(self):
+        """Install the Mullvad/Tailscale DNS-sync launchd agent from vpn-dns-menubar"""
+        print("⚙️ Installing VPN/DNS watcher launchd agent...")
+
+        label = 'com.nicholassmith.mullvad-tailscale-dns'
+        repo = Path.home() / 'Code' / 'vpn-dns-menubar'
+        if not self.clone_or_update_repo(
+                'https://github.com/nicholaspsmith/vpn-dns-menubar.git', repo):
+            self.add_failure("VPN/DNS agent: vpn-dns-menubar clone failed")
+            return False
+
+        watch_script = repo / 'dns-watcher' / 'mullvad-tailscale-dns-sync.sh'
+        template = repo / 'dns-watcher' / f'{label}.plist'
+        if not (watch_script.exists() and template.exists()):
+            self.add_failure("VPN/DNS agent: dns-watcher files not found in repo")
+            return False
+
+        try:
+            template_text = template.read_text()
+            if '__SCRIPT__' not in template_text:
+                # Fail loudly if the upstream template convention drifts
+                self.add_failure("VPN/DNS agent: template no longer uses the __SCRIPT__ "
+                                 "placeholder — update this component to match vpn-dns-menubar")
+                return False
+            os.chmod(watch_script, 0o755)
+            launch_agents = Path.home() / 'Library' / 'LaunchAgents'
+            launch_agents.mkdir(parents=True, exist_ok=True)
+            plist_file = launch_agents / f'{label}.plist'
+            plist_file.write_text(template_text.replace('__SCRIPT__', str(watch_script)))
+
+            if self.load_launch_agent(plist_file, label):
+                self.add_success("VPN/DNS watcher agent loaded (Tailscale accept-dns follows Mullvad)")
+            else:
+                self.add_success("VPN/DNS watcher agent installed (loads at next login)")
+            print("💡 Requires the Mullvad VPN and Tailscale apps (Brewfile) to be signed in")
+            return True
+        except Exception as e:
+            self.add_failure(f"VPN/DNS agent installation failed: {e}")
+            return False
+
+    def install_code_catalog(self):
+        """Install the ~/Code project catalog watcher (regenerates PROJECTS.md)"""
+        print("⚙️ Installing ~/Code project catalog watcher...")
+
+        source_dir = Path(__file__).parent / 'local_bin'
+        local_bin = Path.home() / '.local' / 'bin'
+        label = 'com.nicholassmith.code-catalog'
+        try:
+            local_bin.mkdir(parents=True, exist_ok=True)
+            for script in ['code-catalog-refresh', 'code-catalog-watch']:
+                src = source_dir / script
+                if not src.exists():
+                    self.add_failure(f"Code catalog: local_bin/{script} missing from repo")
+                    return False
+                shutil.copy2(src, local_bin / script)
+                os.chmod(local_bin / script, 0o755)
+
+            if self.install_launch_agent(label, [local_bin / 'code-catalog-watch'],
+                                         'code-catalog.log', extra={'ThrottleInterval': 30}):
+                self.add_success("Code catalog watcher loaded (regenerates ~/Code/PROJECTS.md)")
+            else:
+                self.add_success("Code catalog watcher installed (loads at next login)")
+            print("💡 Requires fswatch (Brewfile); `proj`/`list`/`projects` helpers live in .zshrc")
+            return True
+        except Exception as e:
+            self.add_failure(f"Code catalog installation failed: {e}")
+            return False
+
+    def setup_mov_watcher(self):
+        """Install the Downloads MOV → MP4 auto-converter watcher"""
+        print("⚙️ Setting up MOV → MP4 watcher...")
+
+        label = 'com.nicholassmith.mov-watcher'
+        source_script = Path(__file__).parent / 'background_scripts' / 'mov_watcher.sh'
+        if not source_script.exists():
+            self.add_failure("mov_watcher.sh not found in background_scripts directory")
+            return False
+        try:
+            dest_dir = Path.home() / 'background_scripts'
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_script = dest_dir / 'mov_watcher.sh'
+            shutil.copy2(source_script, dest_script)
+            os.chmod(dest_script, 0o755)
+
+            # ThrottleInterval keeps a missing-fswatch failure from hot-looping
+            if self.install_launch_agent(label, [dest_script], 'mov-watcher.log',
+                                         extra={'ThrottleInterval': 300}):
+                self.add_success("MOV watcher started (converts Downloads/*.mov to .mp4)")
+            else:
+                self.add_success("MOV watcher installed (starts at next login)")
+            print("💡 Requires fswatch and ffmpeg (Brewfile)")
+            return True
+        except Exception as e:
+            self.add_failure(f"MOV watcher installation failed: {e}")
+            return False
+
     def print_summary(self):
         """Print installation summary"""
         print("\n" + "="*60)
@@ -859,58 +1055,52 @@ DAYS_TO_KEEP={days_to_keep}
         
         print("\n📋 Next Steps:")
         print("1. Restart your terminal to ensure all PATH changes take effect")
-        print("2. Open iTerm2 and test the hotkey: Ctrl+Q")
-        print("3. Check your new Oh My Zsh-powered terminal!")
-        print("4. Open VS Code and configure Claude Code extension")
+        print("2. Open iTerm2 and assign the Quake profile hotkey (Settings ▸ Profiles ▸ Quake ▸ Keys)")
+        print("3. Launch each menu-bar app once, grant permissions, enable Start at Login in its menu")
+        print("4. Sign in: gh auth login, Tailscale, Mullvad VPN")
         print("5. Run 'claude' in your project directory to start Claude Code")
-        print("6. Test GitHub CLI with: gh auth status")
-        
-        print("\n🔧 Manual Configuration Required:")
-        print("• iTerm2: Go to Settings > Keys > Hotkey to fine-tune hotkey window")
-        print("• VS Code: Configure Claude Code extension with your API key")
-        print("• Python: Run 'source ~/.zshrc' to use new shell configuration")
-        print("• Oh My Zsh: Customize themes and plugins in ~/.zshrc")
+
+        print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
+        print("• TCC permissions: Accessibility for KeyLight, Screen Recording for MacRecorder,")
+        print("  System Events for ThemeToggle — grant when each app first asks")
+        print("• Ice: arrange which menu-bar icons stay visible (hide native Mullvad/Tailscale)")
+        print("• SSH keys + ~/.ssh/config (e.g. the 'dino' host) — restore from backup")
+        print("• App Store apps (full Xcode is only needed for ThemeToggle)")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
             print("  sudo ln -sf '/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code' /usr/local/bin/code")
-        
+
         print("\n📚 Useful Commands:")
         print("• claude --help          - Claude Code help")
         print("• code .                 - Open current directory in VS Code")
-        print("• gh status              - Check GitHub CLI status")
-        print("• python --version       - Check Python version")
-        print("• node --version         - Check Node.js version")
-        print("• nvm --version          - Check NVM version")
+        print("• gh auth status         - Check GitHub CLI status")
         print("• nvm list               - List installed Node.js versions")
-        print("• nvm install <version>  - Install specific Node.js version")
-        print("• nvm use <version>      - Switch to Node.js version")
-        print("• code --list-extensions - List installed VS Code extensions")
-        print("• launchctl list | grep killapplemediatracking - Check media killer status")
-        print("• launchctl unload ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Stop media killer")
-        print("• launchctl load ~/Library/LaunchAgents/com.user.killapplemediatracking.plist - Start media killer")
-        print("• launchctl list | grep downloadrecycler - Check download recycler status")
-        print("• ~/background_scripts/download_recycler.sh - Run download recycler manually")
-        print("• cat ~/background_scripts/download_recycler.log - View download recycler log")
-        print("• nano ~/background_scripts/download_recycler.conf - Edit download recycler settings")
+        print("• proj                   - Fuzzy-pick a ~/Code project (after new shell)")
+        print("• launchctl list | grep nicholassmith - Check custom launchd agents")
+        print("• brew bundle --file=Brewfile - Re-run/repair package installs")
     
     def get_installation_steps(self):
         """Get all available installation steps"""
         return [
             ("Homebrew", "Package manager for macOS", self.install_homebrew),
-            ("Python via Homebrew", "Python development environment", self.install_python_via_homebrew),
+            ("Brew Bundle", "Curated Brewfile: CLI tools, casks, fonts", self.install_brew_bundle),
             ("ZSH Shell", "Z Shell (should already be default)", self.install_zsh),
             ("Oh My Zsh", "ZSH framework for terminal customization", self.install_oh_my_zsh),
-            ("Copy .zshrc config", "Custom ZSH configuration file", self.copy_zshrc),
-            ("NVM & Node.js LTS", "Node Version Manager and Node.js", self.install_nvm),
-            ("iTerm2", "Enhanced terminal emulator", self.install_iterm),
-            ("Claude Code", "Claude AI coding assistant", self.install_claude_code),
+            ("Copy .zshrc config", "Custom ZSH configuration + fzf-git.sh", self.copy_zshrc),
+            ("NVM & Node.js LTS", "Node Version Manager (Homebrew) and Node.js", self.install_nvm),
+            ("iTerm2 Quake profile", "Hotkey dropdown profile via DynamicProfiles", self.install_iterm_profile),
+            ("Claude Code", "Claude AI coding assistant (native installer)", self.install_claude_code),
             ("VS Code", "Visual Studio Code editor", self.install_vscode),
-            ("VS Code Extensions", "Claude Code and Python extensions", self.configure_vscode_extensions),
-            ("GitHub CLI", "GitHub command line tool", self.install_github_cli),
-            ("GitHub Authentication", "Sign in to GitHub CLI", self.setup_github_cli),
-            ("Dark Mode Toggle", "NightOwl menu bar app for dark/light mode switching", self.install_dark_mode_toggle),
-            ("Apple Media Tracking Killer", "Background process to disable media tracking", self.setup_kill_apple_media_tracking),
-            ("Download Recycler", "Auto-clean old files from Downloads folder", self.setup_download_recycler),
+            ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
+            ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
+            ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
+            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder", self.install_menu_bar_apps),
+            ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state", self.install_vpn_dns_agent),
+            ("Code catalog", "~/Code PROJECTS.md watcher + proj/list helpers", self.install_code_catalog),
+            ("MOV Watcher", "Auto-convert Downloads/*.mov to .mp4", self.setup_mov_watcher),
+            ("Dark Mode Toggle", "ThemeToggle menu bar app (requires full Xcode)", self.install_dark_mode_toggle),
+            ("Apple Media Tracking Killer", "Legacy: background process to disable media tracking", self.setup_kill_apple_media_tracking),
+            ("Download Recycler", "Legacy: auto-clean old files from Downloads folder", self.setup_download_recycler),
         ]
     
     def display_checkbox_menu(self):
@@ -1129,7 +1319,7 @@ Examples:
                         help='Skip confirmation prompt')
     
     args = parser.parse_args()
-    setup = MacOSDevSetup()
+    setup = MacOSDevSetup(no_confirm=args.no_confirm)
     
     # Handle --list option
     if args.list:

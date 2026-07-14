@@ -1,0 +1,80 @@
+# System Inventory — audited 2026-07-14
+
+Snapshot of the reference machine (MacBook, Apple Silicon, macOS 26.5.2) that
+this repo reproduces. Items marked **automated** are handled by
+`bootstrap.sh` / `setup_macos_dev.py`; **manual** items can't be scripted
+(logins, TCC permission grants) or are deliberately out of scope.
+
+## Menu-bar app suite (automated)
+
+Built from personal repos cloned side-by-side under `~/Code` (the apps depend
+on the frameworks via local `../` SPM paths), then symlinked into
+`~/Applications` so rebuilds propagate. Start-at-login lives inside each app
+(SMAppService), not in a LaunchAgent.
+
+| App | Repo | Notes |
+|---|---|---|
+| ProcessMonitor.app | MacOS_Process_Monitor | |
+| VPN & DNS.app | vpn-dns-menubar | one dot for Mullvad/Tailscale state |
+| Battery Time.app | battery-time-menubar | |
+| KeyLight.app | keylight-menubar | needs Accessibility (manual grant) |
+| MacRecorder.app | MacRecorder | needs Screen Recording (manual grant) |
+| (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
+| (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
+
+Signing: `StatusItemKit/scripts/setup-signing.sh` creates the stable
+self-signed "StatusItemKit Local Signing" identity once, so TCC grants
+survive rebuilds.
+
+## launchd agents
+
+| Label | Status | Source |
+|---|---|---|
+| com.nicholassmith.mullvad-tailscale-dns | **automated** | vpn-dns-menubar repo (DNS watcher) |
+| com.nicholassmith.code-catalog | **automated** | this repo (`local_bin/code-catalog-*`) |
+| com.nicholassmith.mov-watcher | **automated** | this repo (`background_scripts/mov_watcher.sh`) — new label; was not previously installed |
+| com.nicholassmith.battery-time-power-watch | not reproduced | SwiftBar-era; still loaded on the audited machine even though the Swift app handles plug/unplug in-process — candidate for removal |
+| com.nicholassmith.godot-headless-reaper | not reproduced | machine-specific (`~/.local/bin/godot-headless-reaper`) |
+| com.nicholassmith.networkscan / networkscan-server | not reproduced | project-specific (`~/Code/networkscan`, github: Network-Scan-Web-UI) |
+| com.user.killapplemediatracking | optional component | in repo; was NOT installed on the audited machine |
+| com.user.downloadrecycler | optional component | in repo; was NOT installed on the audited machine |
+
+## `~/.local/bin` (beyond what installers create)
+
+| Script | Status |
+|---|---|
+| code-catalog-refresh / code-catalog-watch | **automated** — vendored in `local_bin/` (they existed nowhere else) |
+| claude | **automated** — native Claude Code installer |
+| dell-display-fix | manual — BetterDisplay/Dell monitor hardware specific |
+| godot-headless-reaper, discord_webhook, routercode, audio-separator*, qwen | manual — project/machine specific |
+| uv, uvx, pipenv, yt-dlp | manual — installed by their own installers on demand |
+
+## Shell / CLI (automated)
+
+- Oh My Zsh (robbyrussell theme) + `zsh/.zshrc` (genericized copy of the live
+  file: brew-nvm lazy-load, fzf init cache, direnv/zoxide hooks, venv-aware
+  `python()`, git helpers, `proj`/`list`/`projects` catalog helpers)
+- `~/Code/fzf-git.sh` clone (sourced by .zshrc)
+- Brewfile: curated core (see file); heavier stacks commented out
+- Claude Code via native installer; VS Code + `vscode/extensions.txt` (44 ext.)
+- git: identity, LFS, gh credential helper (after `gh auth login`)
+
+## Installed outside Homebrew on the audited machine (manual)
+
+- Mullvad VPN (direct download; Brewfile installs the cask on a new machine)
+- iTerm2, VS Code, Raycast (direct downloads; casks cover them)
+- PostgreSQL 18 (EDB installer, `/Library/PostgreSQL/18`)
+- Rust (rustup), Bun, pnpm, Meteor — language installers, run on demand
+- App Store: Xcode (only needed for ThemeToggle), Logic Pro, etc.
+- LuLu, BetterDisplay, Amphetamine, audio plugins & DAWs — out of scope
+
+## Known machine quirks (documented, not scripted)
+
+- `ssh dino` (home server) only works with Mullvad disconnected.
+- SwiftBar cask is installed but retired — plugins unsymlinked; Swift apps
+  replaced it. Excluded from the Brewfile.
+- BetterTouchTool quarantined in `~/.disabled-apps` (replaced by KeyLight).
+- Ice (`jordanbaird-ice@beta`) hides the native Mullvad/Tailscale icons;
+  its layout is configured by hand.
+- ThemeToggle.app (this repo's dark/light toggle) was **not** installed on
+  the audited machine; the component remains available and optional.

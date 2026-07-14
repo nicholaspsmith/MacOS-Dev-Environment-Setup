@@ -1,0 +1,144 @@
+#!/bin/zsh
+# code-catalog-refresh — regenerate $ROOT/PROJECTS.md.
+# Every column is derived EXCEPT Description, preserved across runs by project name.
+# Spec: ~/Code/.claude/specs/2026-06-11-code-catalog-design.md
+set -euo pipefail
+zmodload zsh/datetime
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+command -v fd >/dev/null || { print -u2 "code-catalog-refresh: fd not found in PATH"; exit 1 }
+
+ROOT="${CODE_CATALOG_ROOT:-$HOME/Code}"
+CATALOG="$ROOT/PROJECTS.md"
+OWNER="nicholaspsmith"
+
+# Activity-tier thresholds, days since last file change (tune freely)
+T_ACTIVE=90      # <=  -> active
+T_IDLE=365       # <=  -> idle
+T_STALE=1095     # <=  -> stale   (3y)
+T_DORMANT=1825   # <=  -> dormant (5y); beyond -> ancient
+
+# Dirs that don't count as activity (installs/builds aren't work)
+typeset -a EXCLUDES; EXCLUDES=(.git node_modules target .venv venv dist build)
+typeset -a FDX; for e in $EXCLUDES; do FDX+=(-E $e); done
+
+NOW=$EPOCHSECONDS
+
+newest_mtime() {  # path -> epoch of newest non-excluded file (or own mtime)
+  local p=$1 m=""
+  [[ -f $p ]] && { stat -f %m "$p"; return }
+  m=$(fd -H -I -t f $FDX . "$p" -X stat -f %m 2>/dev/null | sort -rn | head -1 || true)
+  [[ -n $m ]] && print $m || stat -f %m "$p"
+}
+
+detect_lang() {  # path -> language label
+  local p=$1 ext
+  if [[ -f $p ]]; then
+    case $p in (*.ts) print TypeScript;; (*.js) print JavaScript;;
+      (*.py) print Python;; (*.sh) print Shell;; (*) print "—";; esac
+    return
+  fi
+  [[ -f $p/Cargo.toml ]]                          && { print Rust; return }
+  [[ -f $p/go.mod ]]                              && { print Go; return }
+  [[ -f $p/Package.swift ]]                       && { print Swift; return }
+  [[ -f $p/package.json && -f $p/tsconfig.json ]] && { print TypeScript; return }
+  [[ -f $p/package.json ]]                        && { print JavaScript; return }
+  [[ -f $p/pyproject.toml || -f $p/requirements.txt || -f $p/setup.py ]] && { print Python; return }
+  [[ -f $p/Gemfile ]]                             && { print Ruby; return }
+  [[ -f $p/deps.edn || -f $p/project.clj ]]       && { print Clojure; return }
+  ext=$(fd -H -I -t f -d 3 $FDX . "$p" 2>/dev/null | awk -F. 'NF>1{print tolower($NF)}' \
+    | grep -xE 'c|h|cpp|m|swift|rs|go|py|js|jsx|ts|tsx|rb|sh|zsh|clj|java|html|css|s' \
+    | sort | uniq -c | sort -rn | head -1 | awk '{print $2}' || true)
+  case $ext in
+    (c|h) print C;; (cpp) print C++;; (m) print ObjC;; (swift) print Swift;;
+    (rs) print Rust;; (go) print Go;; (py) print Python;;
+    (js|jsx) print JavaScript;; (ts|tsx) print TypeScript;; (rb) print Ruby;;
+    (sh|zsh) print Shell;; (clj) print Clojure;; (java) print Java;;
+    (html|css) print Web;; (s) print Asm;; (*) print "—";;
+  esac
+}
+
+# ---- Pass 1: carry over descriptions from the existing catalog ----
+typeset -A DESC
+if [[ -f $CATALOG ]]; then
+  grep -q '^| Project |' "$CATALOG" || {
+    print -u2 "ERROR: $CATALOG exists but has no parseable table header; refusing to overwrite."
+    exit 1
+  }
+  while IFS=$'\t' read -r n d; do DESC[$n]=$d; done < <(
+    awk -F'\\|' '/^\|/ {
+      n=$2; d=$4; gsub(/^ +| +$/,"",n); gsub(/^ +| +$/,"",d)
+      if (n != "Project" && n !~ /^[-: ]*$/) print n "\t" d
+    }' "$CATALOG")
+fi
+
+# ---- Pass 2: scan entries, derive facts ----
+typeset -a names; typeset -A EPOCH MEPOCH CEPOCH REMOTE GITCOL PLANG STATUS LOWER  # PLANG not LANG: LANG is the locale env var
+for p in "$ROOT"/*(N); do
+  name=${p:t}
+  [[ $name == PROJECTS.md ]] && continue
+  mep=$(newest_mtime "$p") || continue   # entry vanished mid-scan
+  gitcol="—" remote="" cep=""
+  if [[ -e $p/.git ]]; then
+    remote=$(git -C "$p" remote get-url origin 2>/dev/null || true)
+    if [[ -z $remote ]]; then gitcol=local
+    elif [[ ${remote:l} == *[:/]${OWNER:l}/* ]]; then gitcol=own
+    else gitcol=clone; fi
+    cep=$(git -C "$p" log -1 --format=%ct 2>/dev/null || true)
+    [[ -n $(git -C "$p" status --porcelain 2>/dev/null | head -1) ]] && gitcol="${gitcol} (needs commit)"  # dirty marker
+  fi
+  epoch=$mep
+  [[ -n $cep && $cep -gt $epoch ]] && epoch=$cep
+  age=$(( (NOW - epoch) / 86400 ))
+  tier=""
+  if   (( age <= T_ACTIVE ));  then tier=active
+  elif (( age <= T_IDLE ));    then tier=idle
+  elif (( age <= T_STALE ));   then tier=stale
+  elif (( age <= T_DORMANT )); then tier=dormant
+  else                              tier=ancient; fi
+  names+=($name)
+  EPOCH[$name]=$epoch; MEPOCH[$name]=$mep; CEPOCH[$name]=$cep
+  GITCOL[$name]=$gitcol; STATUS[$name]=$tier
+  REMOTE[$name]=${${remote:l}%.git}
+  PLANG[$name]=$(detect_lang "$p")
+  LOWER[${name:l}]=$name   # case-insensitive folder lookup for renamed detection
+done
+
+# ---- Pass 3: renamed detection (overrides the tier ladder) ----
+for name in $names; do
+  r=${REMOTE[$name]}
+  [[ -z $r ]] && continue
+  for other in $names; do
+    [[ $other == $name || -z ${REMOTE[$other]} ]] && continue
+    [[ ${REMOTE[$other]} == $r && ${EPOCH[$other]} -gt ${EPOCH[$name]} ]] && STATUS[$name]=renamed
+  done
+  base=${r:t}                      # repo name from remote URL (already lowercase)
+  actual=${LOWER[$base]:-}         # the folder that name actually belongs to, if any
+  if [[ -n $actual && $actual != $name && ${EPOCH[$actual]} -ge ${EPOCH[$name]} ]]; then
+    STATUS[$name]=renamed
+  fi
+done
+
+# ---- Pass 4: emit sorted table atomically ----
+typeset -A RANK
+RANK=(active 0 idle 1 stale 2 dormant 3 ancient 4 renamed 5)
+tmp=$(mktemp "$ROOT/.PROJECTS.md.tmp.XXXXXX")
+trap 'rm -f "$tmp"' EXIT   # no orphaned tmp if an error aborts before mv
+{
+  print '<!-- Generated by code-catalog-refresh. All columns derived except Description. -->'
+  print '<!-- Edit descriptions freely (no | characters); they survive refreshes, keyed by project name. -->'
+  print ''
+  print '# ~/Code Projects'
+  print ''
+  print '| Project | Status | Description | Lang | Last commit | Last change | Git |'
+  print '|---|---|---|---|---|---|---|'
+  for name in $names; do
+    local lcd="—"
+    [[ -n ${CEPOCH[$name]} ]] && lcd=$(date -r ${CEPOCH[$name]} +%Y-%m-%d)
+    printf '%s\t%s\t| %s | %s | %s | %s | %s | %s | %s |\n' \
+      "${RANK[${STATUS[$name]}]}" "${EPOCH[$name]}" \
+      "$name" "${STATUS[$name]}" "${DESC[$name]:-}" "${PLANG[$name]}" \
+      "$lcd" "$(date -r ${MEPOCH[$name]} +%Y-%m-%d)" "${GITCOL[$name]}"
+  done | sort -t$'\t' -k1,1n -k2,2rn | cut -f3-
+} > "$tmp"
+mv "$tmp" "$CATALOG"
+print "code-catalog-refresh: wrote ${#names} entries to $CATALOG"

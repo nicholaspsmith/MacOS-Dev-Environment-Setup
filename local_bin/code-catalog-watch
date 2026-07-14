@@ -1,0 +1,46 @@
+#!/bin/zsh
+# code-catalog-watch — keep PROJECTS.md fresh.
+# fswatch (FSEvents, any depth) -> 10-min trailing debounce -> refresh.
+# A read timeout doubles as the daily tick: aging tiers flip when NOTHING
+# changes, so no file event ever fires for them.
+set -u
+zmodload zsh/datetime
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+ROOT="${CODE_CATALOG_ROOT:-$HOME/Code}"
+DEBOUNCE="${CODE_CATALOG_DEBOUNCE:-600}"
+DAILY="${CODE_CATALOG_DAILY:-86400}"
+REFRESH="${0:A:h}/code-catalog-refresh"
+
+log() { print -r -- "$(strftime '%F %T' $EPOCHSECONDS) $*" }
+
+command -v fswatch >/dev/null || { log "fswatch not found in PATH"; sleep 60; exit 1 }
+[[ -d $ROOT ]] || { log "$ROOT missing; retrying via restart"; sleep 60; exit 1 }
+
+log "watching $ROOT (debounce=${DEBOUNCE}s tick=${DAILY}s)"
+log "initial refresh"
+timeout 600 "$REFRESH" || log "refresh FAILED ($?)"
+
+# Self-suppression: the catalog and its temp file must not re-trigger us.
+fswatch -o -l 10 -E \
+  -e "^${ROOT:A}/PROJECTS\.md$" -e "^${ROOT:A}/\.PROJECTS\.md\.tmp" \
+  -e '/\.git/' \
+  -e "^${ROOT:A}/[^/]+/(.*/)?(node_modules|target|dist|build)/" \
+  -e '\.DS_Store$' \
+  "$ROOT" | while true; do
+    start=$EPOCHSECONDS
+    if read -t $DAILY -r evt; then
+      log "change detected; debouncing ${DEBOUNCE}s"
+      sleep $DEBOUNCE
+      while read -t 1 -r evt; do :; done    # drain the burst
+      log "refresh (events)"
+    else
+      # read failed: daily timeout, or fswatch died (EOF returns instantly)
+      if (( EPOCHSECONDS - start < DAILY - 5 )); then
+        log "fswatch pipe closed; exiting for launchd restart"
+        exit 1
+      fi
+      log "refresh (daily tick)"
+    fi
+    timeout 600 "$REFRESH" || log "refresh FAILED ($?)"
+done
