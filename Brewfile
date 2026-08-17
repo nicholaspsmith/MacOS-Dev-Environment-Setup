@@ -6,6 +6,7 @@
 # Install:  brew bundle --file=Brewfile
 
 ## ── Core CLI ────────────────────────────────────────────────────────────
+brew "atuin"            # hooked in .zshrc — fuzzy synced history, owns ^R
 brew "bash"
 brew "bat"
 brew "btop"
@@ -22,6 +23,7 @@ brew "htop"
 brew "hyperfine"
 brew "jq"
 brew "lazygit"
+brew "mosh"              # `dino` alias in .zshrc — ssh that survives sleep
 brew "neovim"            # EDITOR / vim alias in .zshrc
 brew "parallel"
 brew "rename"
@@ -35,7 +37,8 @@ brew "wget"
 brew "zoxide"            # hooked in .zshrc (z <name>)
 
 ## ── Watcher / agent dependencies ────────────────────────────────────────
-brew "fswatch"           # code-catalog watcher
+brew "fswatch"           # general file-watching (the code-catalog watcher it
+                         # was added for is retired; code-sync schedules itself)
 brew "ffmpeg"            # general media transcoding
 brew "imagemagick"       # vpn-dns-menubar fallback PNG rebuilds
 

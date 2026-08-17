@@ -33,7 +33,8 @@ survive rebuilds.
 | Label | Status | Source |
 |---|---|---|
 | com.nicholassmith.mullvad-tailscale-dns | **automated** | vpn-dns-menubar repo (DNS watcher) |
-| com.nicholassmith.code-catalog | **automated** | this repo (`local_bin/code-catalog-*`) |
+| com.code-sync.agent | **automated** | code-sync's own `install.sh` (hourly + at login; ~/Code sync) |
+| com.nicholassmith.code-catalog | **retired by setup** | the fswatch PROJECTS.md watcher; superseded by code-sync, which schedules itself. The code-sync step boots it out and deletes its plist when it finds one |
 | com.nicholassmith.mov-watcher | removed | MOV→MP4 watcher component was dropped 2026-07-14 (never installed anywhere) |
 | com.nicholassmith.battery-time-power-watch | **retired by setup** | SwiftBar-era; superseded by the Swift app's in-process IOKit watcher (`main.swift`). The menu-bar suite component boots it out and deletes its plist when it finds one |
 | com.nicholassmith.godot-headless-reaper | not reproduced | machine-specific (`~/.local/bin/godot-headless-reaper`) |
@@ -45,7 +46,8 @@ survive rebuilds.
 
 | Script | Status |
 |---|---|
-| code-catalog-refresh / code-catalog-watch | **automated** — vendored in `local_bin/` (they existed nowhere else) |
+| newtools | **automated** — vendored in `local_bin/` (exists nowhere else); per-session CLI cheat sheet |
+| code-catalog-refresh / code-catalog-watch | **retired** — renamed `.retired` by the code-sync step; no longer vendored |
 | claude | **automated** — native Claude Code installer |
 | dell-display-fix | manual — BetterDisplay/Dell monitor hardware specific |
 | godot-headless-reaper, discord_webhook, routercode, audio-separator*, qwen | manual — project/machine specific |
@@ -55,7 +57,8 @@ survive rebuilds.
 
 - Oh My Zsh (robbyrussell theme) + `zsh/.zshrc` (genericized copy of the live
   file: brew-nvm lazy-load, fzf init cache, direnv/zoxide hooks, venv-aware
-  `python()`, git helpers, `proj`/`list`/`projects` catalog helpers)
+  `python()`, git helpers, zoxide/atuin init, `newtools` banner; `proj`/`list`/
+  `projects` now come from code-sync rather than being defined inline)
 - `~/Code/fzf-git.sh` clone (sourced by .zshrc)
 - Oh My Zsh custom plugins (git clones, not brew): `zsh-autosuggestions` +
   `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
