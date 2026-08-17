@@ -30,7 +30,7 @@ Every component is idempotent — re-running is always safe.
 ./bootstrap.sh --all                        # everything, but pause for prompts
 ./bootstrap.sh --all --no-confirm           # everything, fully unattended
 python3 setup_macos_dev.py --list           # list all components with numbers
-python3 setup_macos_dev.py --select 2,5,13  # install only components 2, 5, and 13
+python3 setup_macos_dev.py --select 2,6,14  # install only components 2, 6, and 14
 ```
 
 (`bootstrap.sh` and `setup_macos_dev.py` take the same flags; use `bootstrap.sh`
@@ -44,22 +44,23 @@ on a machine that might not have Homebrew yet.)
 | 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, direnv, neovim, fswatch, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
-| 5 | Copy .zshrc | installs `zsh/.zshrc` (backs up your old one to `~/.zshrc.backup`) and clones `fzf-git.sh` |
-| 6 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
-| 7 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
-| 8 | Claude Code | native installer → `~/.local/bin/claude` (brew cask fallback) |
-| 9 | VS Code | installs the latest VS Code + puts the `code` command on PATH (brew-bin symlink and `~/.zshrc`) |
-| 10 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
-| 11 | GitHub CLI & git config | gh, git identity, git-lfs |
-| 12 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 13 | Menu-bar app suite | clones + builds **7 apps** into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar); retires the launchd agents the apps replaced |
-| 14 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
-| 15 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
-| 16 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 14 + 15) |
-| 17 | Code catalog | creates `~/Code` if missing; `PROJECTS.md` watcher + `proj`/`list`/`projects` shell helpers |
+| 5 | Zsh plugins | clones `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
+| 6 | Copy .zshrc | installs `zsh/.zshrc` (backs up your old one to `~/.zshrc.backup`) and clones `fzf-git.sh` |
+| 7 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
+| 8 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
+| 9 | Claude Code | native installer → `~/.local/bin/claude` (brew cask fallback) |
+| 10 | VS Code | installs the latest VS Code + puts the `code` command on PATH (brew-bin symlink and `~/.zshrc`) |
+| 11 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
+| 12 | GitHub CLI & git config | gh, git identity, git-lfs |
+| 13 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
+| 14 | Menu-bar app suite | clones + builds **7 apps** into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar); retires the launchd agents the apps replaced |
+| 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
+| 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
+| 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
+| 18 | Code catalog | creates `~/Code` if missing; `PROJECTS.md` watcher + `proj`/`list`/`projects` shell helpers |
 
 The old media-tracking-killer and download-recycler background scripts are now
-full menu-bar apps inside component 13 — each with an on/off toggle, its own
+full menu-bar apps inside component 14 — each with an on/off toggle, its own
 settings (kill interval / retention days), and Start at Login. The Dark Mode
 Toggle (macOS has this built into Control Center now) and MOV watcher
 components were removed.
@@ -67,10 +68,48 @@ components were removed.
 Examples:
 
 ```sh
-python3 setup_macos_dev.py --select 13             # just (re)build the menu-bar apps
+python3 setup_macos_dev.py --select 14             # just (re)build the menu-bar apps
 python3 setup_macos_dev.py --select 2 --no-confirm # just (re)run the Brewfile
-python3 setup_macos_dev.py --select 5,6            # shell config + node
+python3 setup_macos_dev.py --select 5,6,7          # zsh plugins + shell config + node
 ```
+
+## Inline autosuggestions
+
+Components 5 + 6 give the shell the grey ghost-text completion you see in fish
+and Warp, without leaving zsh:
+
+- **`zsh-autosuggestions`** — suggests as you type from your shell history.
+- **`fast-syntax-highlighting`** — colors commands live, so a typo shows up red
+  before you press Enter.
+
+Keys, once installed:
+
+| Key | Effect |
+|---|---|
+| `Tab` | accept the whole suggestion — falls through to normal completion when no suggestion is showing |
+| `→` / `End` / `^E` | accept the whole suggestion |
+| `⌥F` | accept **one word** of it |
+
+Acceptance only fires with the cursor at end of line; mid-line, `→` just moves
+the cursor as usual.
+
+Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
+
+1. `fast-syntax-highlighting` must be the **last** entry in `plugins=(…)` — it
+   wraps every ZLE widget defined before it.
+2. The Tab block must be the **last thing in the file**. It captures whichever
+   widget currently owns `^I` instead of hardcoding one, because `fzf --zsh`
+   rebinds Tab to `fzf-completion` earlier in the file; hardcoding
+   `expand-or-complete` there would silently break fzf's `**<TAB>` trigger. Any
+   new Tab-binding tool has to be added *above* that block.
+
+`.zshrc` appends the two plugins only if their directories exist, so a machine
+that skipped component 5 still starts a clean shell — just without ghost text.
+Suggestions come from shell history, falling back to completions. (This repo
+does not install `atuin`, but if you add it yourself it prepends its own
+strategy to `ZSH_AUTOSUGGEST_STRATEGY` and its synced DB becomes the first
+source.) Cost is roughly +15 ms on shell startup, measured on the reference
+machine.
 
 ## After install — run these
 
@@ -87,7 +126,7 @@ gh auth login && gh auth setup-git
 #    then rebuild the menu-bar apps so TCC grants survive future rebuilds
 ~/Code/StatusItemKit/scripts/setup-signing.sh
 cd ~/MacOS-Dev-Environment-Setup   # or wherever you cloned this repo
-python3 setup_macos_dev.py --select 13 --no-confirm
+python3 setup_macos_dev.py --select 14 --no-confirm
 ```
 
 Then do the things macOS won't let a script do:
@@ -110,6 +149,7 @@ launchctl list | grep nicholassmith        # custom agents loaded?
 brew bundle check --file=Brewfile          # Brewfile satisfied?
 gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
+bindkey '^I'                               # Tab -> _tab_accept_or_complete?
 tail -5 ~/Library/Logs/code-catalog.log         # catalog watcher alive?
 tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail
 ```
