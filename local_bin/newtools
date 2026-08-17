@@ -1,0 +1,95 @@
+#!/bin/sh
+# newtools — cheat sheet for the modern CLI toolkit (set up 2026-07-28).
+#   newtools         one line per tool, alphabetical (printed at the start of each session)
+#   newtools list    same as the default listing
+#   newtools table   full table: what each tool replaces + why it's better
+# Same script is deployed on the Mac and on dino (~/.local/bin/newtools).
+
+if [ -t 1 ]; then
+  B="$(printf '\033[1m')" C="$(printf '\033[36m')" D="$(printf '\033[2m')" R="$(printf '\033[0m')"
+else
+  B="" C="" D="" R=""
+fi
+
+# rep N — print N horizontal border characters
+rep() { i=$1; while [ "$i" -gt 0 ]; do printf '─'; i=$((i-1)); done; }
+# rule <left> <mid> <right> — full-width horizontal rule; segment widths must
+# match the column widths in table() (content width + 2 for padding spaces)
+rule() { printf '%s' "$1"; rep 11; printf '%s' "$2"; rep 19; printf '%s' "$2"; rep 66; printf '%s\n' "$3"; }
+
+table() {
+  rule '┌' '┬' '┐'
+  printf "│ %s%-9s%s │ %s%-17s%s │ %s%-64s%s │\n" \
+    "$B" "TOOL" "$R" "$B" "REPLACES" "$R" "$B" "WHY IT'S BETTER" "$R"
+  rule '├' '┼' '┤'
+  printf "│ %s%-9s%s │ %-17s │ %-64s │\n" \
+    "$C" atuin     "$R" "shell history"     "history in a real DB: fuzzy ^R search, optional encrypted sync" \
+    "$C" bat       "$R" "cat / less"        "syntax highlighting, line numbers, git changes in the gutter" \
+    "$C" btop      "$R" "top / htop"        "beautiful, mouse-friendly system monitor" \
+    "$C" delta     "$R" "git diff pager"    "side-by-side, word-level diffs (needs gitconfig wiring)" \
+    "$C" direnv    "$R" "manual env setup"  "auto-loads/unloads .envrc as you cd between projects" \
+    "$C" duf       "$R" "df"                "readable, colored table of mounts and free space" \
+    "$C" dust      "$R" "du"                "disk usage as a readable tree, biggest first" \
+    "$C" eza       "$R" "ls"                "colors, git status column, built-in tree (eza --tree)" \
+    "$C" fd        "$R" "find"              "simpler syntax (fd pattern), fast, respects .gitignore" \
+    "$C" fzf       "$R" "manual hunting"    "fuzzy-find anything: ^T files, Alt-C dirs; pipes with everything" \
+    "$C" gh        "$R" "github.com tab"    "PRs, issues, releases, CI runs — all from the terminal" \
+    "$C" glow      "$R" "raw markdown"      "renders markdown beautifully in the terminal (glow README.md)" \
+    "$C" hyperfine "$R" "time"              "real benchmarking: warmups, many runs, statistical comparison" \
+    "$C" jq        "$R" "JSON squinting"    "query/transform JSON from the shell; pairs with xh" \
+    "$C" lazygit   "$R" "git CLI juggling"  "full git TUI: stage hunks, rebase, branch — keyboard-driven" \
+    "$C" llm       "$R" "cloud coding AI"   "Qwen3.8-27B via Ollama — Claude Code/Qwen Code/REPL, offline" \
+    "$C" mosh      "$R" "ssh"               "survives sleep, roaming, and IP changes; pair with tmux" \
+    "$C" nvim      "$R" "vim"               "faster, Lua config, built-in LSP (Mac; not installed on dino)" \
+    "$C" rg        "$R" "grep"              "10-100x faster; skips .gitignore'd files by default" \
+    "$C" tldr      "$R" "man"               "example-first help: 'tldr tar' shows what you actually want" \
+    "$C" tmux      "$R" "bare terminal"     "remote sessions that survive disconnects (tmux new -A -s main)" \
+    "$C" watchexec "$R" "manual re-running" "rerun any command when files change" \
+    "$C" xh        "$R" "curl (for APIs)"   "JSON by default, colored output, human-friendly syntax" \
+    "$C" zoxide    "$R" "cd"                "z <name> jumps to any directory you visit, ranked by frecency"
+  rule '└' '┴' '┘'
+}
+
+banner() {
+  printf "%sModern CLI tools%s %s(newtools table = full comparison)%s\n" "$B" "$R" "$D" "$R"
+  printf "  %s%-10s%s %s\n" \
+    "$C" atuin     "$R" "better shell history — fuzzy ^R, syncs across machines" \
+    "$C" bat       "$R" "better cat — syntax highlighting + git gutter" \
+    "$C" btop      "$R" "better top — pretty system monitor" \
+    "$C" delta     "$R" "better git diff — side-by-side, word-level" \
+    "$C" direnv    "$R" "auto-loads per-directory .envrc" \
+    "$C" duf       "$R" "better df — readable mount table" \
+    "$C" dust      "$R" "better du — disk usage tree" \
+    "$C" eza       "$R" "better ls — colors, git status, --tree" \
+    "$C" fd        "$R" "better find — simpler syntax, respects .gitignore" \
+    "$C" fzf       "$R" "fuzzy finder — ^T files, Alt-C dirs" \
+    "$C" gh        "$R" "GitHub from the terminal — PRs, issues, CI" \
+    "$C" glow      "$R" "markdown reader for the terminal" \
+    "$C" hyperfine "$R" "better time — real benchmarking" \
+    "$C" jq        "$R" "JSON query/transform swiss-army knife" \
+    "$C" lazygit   "$R" "git TUI — stage hunks, rebase, branch" \
+    "$C" mosh      "$R" "better ssh — survives sleep + roaming" \
+    "$C" nvim      "$R" "better vim — Lua config, built-in LSP" \
+    "$C" rg        "$R" "better grep — much faster, respects .gitignore" \
+    "$C" tldr      "$R" "better man — example-first help" \
+    "$C" tmux      "$R" "sessions that survive disconnects" \
+    "$C" watchexec "$R" "rerun a command on file changes" \
+    "$C" xh        "$R" "better curl for APIs — JSON by default" \
+    "$C" zoxide    "$R" "better cd — z <name> jumps by frecency"
+
+  # Local AI. Only advertised where it actually exists: this script is also
+  # deployed on dino, which has no Ollama.
+  if command -v llm >/dev/null 2>&1; then
+    printf "\n%sLocal AI%s %s(llm --help; all offline, no account)%s\n" "$B" "$R" "$D" "$R"
+    printf "  %s%-12s%s %s\n" \
+      "$C" "llm"        "$R" "run Qwen3.8-27B locally — Claude Code interface" \
+      "$C" "llm qwen"   "$R" "same model, Qwen Code interface" \
+      "$C" "llm chat"   "$R" "plain REPL — no agent harness" \
+      "$C" "llm status" "$R" "model, context window, memory"
+  fi
+}
+
+case "${1:-}" in
+  table) table ;;
+  list|*) banner ;;
+esac

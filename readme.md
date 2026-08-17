@@ -41,7 +41,7 @@ on a machine that might not have Homebrew yet.)
 | # | Component | What it does |
 |---|---|---|
 | 1 | Homebrew | installs brew itself |
-| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, direnv, neovim, fswatch, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
+| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
 | 5 | Zsh plugins | clones `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
@@ -57,7 +57,7 @@ on a machine that might not have Homebrew yet.)
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
-| 18 | Code catalog | creates `~/Code` if missing; `PROJECTS.md` watcher + `proj`/`list`/`projects` shell helpers |
+| 18 | code-sync (projects) | creates `~/Code` if missing; clones [code-sync](https://github.com/nicholaspsmith/code-sync) and runs its `install.sh` (`projects`/`proj`/`list`, hourly sync agent); retires the old catalog watcher and installs the `newtools` cheat sheet |
 
 The old media-tracking-killer and download-recycler background scripts are now
 full menu-bar apps inside component 14 — each with an on/off toggle, its own
@@ -150,7 +150,8 @@ brew bundle check --file=Brewfile          # Brewfile satisfied?
 gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
 bindkey '^I'                               # Tab -> _tab_accept_or_complete?
-tail -5 ~/Library/Logs/code-catalog.log         # catalog watcher alive?
+projects                                   # ~/Code sync status block
+tail -5 ~/Library/Logs/code-sync.launchd.log     # sync agent healthy?
 tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail
 ```
 
@@ -166,9 +167,33 @@ Brewfile                curated package manifest (heavy stacks commented out)
 zsh/.zshrc              shell config (genericized from the live machine)
 iterm_profiles/         iTerm2 dynamic profile(s)
 vscode/extensions.txt   VS Code extension set
-local_bin/              code-catalog scripts installed to ~/.local/bin
+local_bin/              scripts installed to ~/.local/bin (newtools cheat sheet)
 docs/                   system inventory + design specs
 ```
 
 `docs/system-inventory.md` records the full audit of the reference machine —
 what's automated, what's deliberately manual, and why.
+
+### About `zsh/.zshrc`
+
+It is a **genericized** copy of the live file, not a verbatim one, and the
+differences are deliberate:
+
+- Absolute `/Users/<name>/…` paths become `$HOME`, and every optional tool is
+  guarded (`command -v fzf`, `[[ -f … ]]`) so the file starts cleanly on a
+  machine that has none of them.
+- Machine-local bits are **omitted**: private-app launchers, LAN IPs, and
+  Tailscale MagicDNS names have no business in a public repo. The `dino` alias
+  survives because it's just an ssh host name you supply yourself in
+  `~/.ssh/config`.
+- The retired fswatch catalog helpers are gone; `proj`/`list`/`projects` now
+  come from code-sync (component 18).
+
+Two ordering constraints matter when re-running components:
+
+1. **Component 18 must run after component 6.** code-sync's `install.sh` edits
+   `~/.zshrc` in place; copying the repo's `.zshrc` over it afterwards would
+   discard that edit. The default order already does this.
+2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`, so
+   after a code-sync reinstall it sits below the Tab block. That's harmless —
+   it binds Esc-s, never `^I` — but nothing that rebinds Tab may go there.

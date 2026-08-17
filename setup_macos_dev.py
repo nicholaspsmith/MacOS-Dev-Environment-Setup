@@ -743,35 +743,73 @@ class MacOSDevSetup:
             self.add_failure(f"VPN/DNS agent installation failed: {e}")
             return False
 
-    def install_code_catalog(self):
-        """Install the ~/Code project catalog watcher (regenerates PROJECTS.md)"""
-        print("⚙️ Installing ~/Code project catalog watcher...")
+    def install_code_sync(self):
+        """Install code-sync, which provides the `projects` tool and ~/Code sync.
 
-        source_dir = Path(__file__).parent / 'local_bin'
-        local_bin = Path.home() / '.local' / 'bin'
-        label = 'com.nicholassmith.code-catalog'
+        Replaces the old fswatch-based code-catalog watcher: code-sync schedules
+        itself (LaunchAgent, hourly + at login) and syncs the repo you cd into,
+        so there is no resident daemon. Its own install.sh owns the LaunchAgent
+        and the marker-delimited .zshrc block, so this just clones and delegates.
+
+        Must run AFTER 'Copy .zshrc config' — install.sh edits ~/.zshrc, and
+        copying the repo's .zshrc afterwards would discard that edit."""
+        print("⚙️ Installing code-sync (`projects` tool + ~/Code sync)...")
+
+        code_dir = Path.home() / 'Code'
+        repo_dir = code_dir / 'code-sync'
         try:
-            # The watcher watches ~/Code — make sure it exists on a fresh machine
-            (Path.home() / 'Code').mkdir(exist_ok=True)
-            local_bin.mkdir(parents=True, exist_ok=True)
-            for script in ['code-catalog-refresh', 'code-catalog-watch']:
-                src = source_dir / script
-                if not src.exists():
-                    self.add_failure(f"Code catalog: local_bin/{script} missing from repo")
-                    return False
-                shutil.copy2(src, local_bin / script)
-                os.chmod(local_bin / script, 0o755)
+            code_dir.mkdir(exist_ok=True)
+            if not self.clone_or_update_repo(
+                    'https://github.com/nicholaspsmith/code-sync.git', repo_dir):
+                self.add_failure("code-sync clone failed (`projects` unavailable)")
+                return False
 
-            if self.install_launch_agent(label, [local_bin / 'code-catalog-watch'],
-                                         'code-catalog.log', extra={'ThrottleInterval': 30}):
-                self.add_success("Code catalog watcher loaded (regenerates ~/Code/PROJECTS.md)")
-            else:
-                self.add_success("Code catalog watcher installed (loads at next login)")
-            print("💡 Requires fswatch (Brewfile); `proj`/`list`/`projects` helpers live in .zshrc")
-            return True
+            installer = repo_dir / 'install.sh'
+            if not installer.exists():
+                self.add_failure("code-sync: install.sh missing from the clone")
+                return False
+            os.chmod(installer, 0o755)
+            result = self.run_command(f'"{installer}"', shell=True,
+                                      capture_output=False, check=False)
+            if not (result and result.returncode == 0):
+                self.add_failure("code-sync install.sh failed (see output above)")
+                return False
+            self.add_success("code-sync installed (`projects`, `proj`, `list`; hourly agent)")
         except Exception as e:
-            self.add_failure(f"Code catalog installation failed: {e}")
+            self.add_failure(f"code-sync installation failed: {e}")
             return False
+
+        # The retired catalog watcher would fight code-sync over PROJECTS.md.
+        self.retire_code_catalog()
+
+        # `newtools` cheat sheet — .zshrc calls it per session behind a guard.
+        try:
+            local_bin = Path.home() / '.local' / 'bin'
+            local_bin.mkdir(parents=True, exist_ok=True)
+            src = Path(__file__).parent / 'local_bin' / 'newtools'
+            if src.exists():
+                shutil.copy2(src, local_bin / 'newtools')
+                os.chmod(local_bin / 'newtools', 0o755)
+                self.add_success("newtools cheat sheet installed")
+            else:
+                self.add_failure("local_bin/newtools missing from repo")
+        except Exception as e:
+            self.add_failure(f"newtools install failed: {e}")
+        return True
+
+    def retire_code_catalog(self):
+        """Unload the pre-code-sync catalog watcher and rename its scripts."""
+        label = 'com.nicholassmith.code-catalog'
+        plist = Path.home() / 'Library' / 'LaunchAgents' / f'{label}.plist'
+        if plist.exists():
+            self.run_command(f'launchctl bootout gui/$(id -u)/{label}',
+                             shell=True, check=False)
+            plist.unlink()
+            self.add_success("retired the old code-catalog watcher agent")
+        for name in ('code-catalog-refresh', 'code-catalog-watch'):
+            old = Path.home() / '.local' / 'bin' / name
+            if old.exists() and not old.name.endswith('.retired'):
+                old.rename(old.with_name(f'{name}.retired'))
 
     def print_summary(self):
         """Print installation summary"""
@@ -834,7 +872,7 @@ class MacOSDevSetup:
             ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
             ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
             ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),
-            ("Code catalog", "~/Code PROJECTS.md watcher + proj/list helpers", self.install_code_catalog),
+            ("code-sync (projects)", "`projects`/`proj`/`list` + scheduled ~/Code sync", self.install_code_sync),
         ]
     
     def display_checkbox_menu(self):

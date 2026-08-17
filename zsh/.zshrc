@@ -210,87 +210,52 @@ fi
 
 command -v direnv >/dev/null && eval "$(direnv hook zsh)"
 
-# You can run this to connect to the dinoserver hp dl380 when on tailscale
-# ssh dino
-alias dino='ssh dino'
+# Home server (Tailscale-only host; needs an ~/.ssh/config entry). mosh survives
+# sleep and network roaming, so prefer it and fall back to ssh.
+if command -v mosh >/dev/null; then
+  alias dino='mosh dino'
+else
+  alias dino='ssh dino'
+fi
 
-# --- ~/Code project catalog (see ~/Code/.claude/specs/2026-06-11-code-catalog-design.md) ---
+# --- Modern CLI toolkit ---
+# zoxide: `z <name>` jumps to a directory by frecency.
 command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
 
-# Fuzzy-pick a project by name/description/status and cd into it.
-# ctrl-t: order by last commit · ctrl-y: order by last change · ctrl-r: status order
-proj() {
-  local root=~/Code catalog=~/Code/PROJECTS.md line name
-  if [[ -f $catalog ]]; then
-    local rows="grep '^|' $catalog | grep -v '^| Project ' | grep -v '^|-'"
-    line=$(eval "$rows" | fzf \
-      --header='name | status | description | lang | last commit | last change | git    [ctrl-t: by commit · ctrl-y: by change · ctrl-r: status order]' \
-      --bind "ctrl-t:reload($rows | sort -t'|' -k6,6r)" \
-      --bind "ctrl-y:reload($rows | sort -t'|' -k7,7r)" \
-      --bind "ctrl-r:reload($rows)" \
-      --preview 'n=$(printf "%s" {} | cut -d"|" -f2 | xargs);
-                 head -40 ~/Code/"$n"/README.md 2>/dev/null;
-                 echo "————";
-                 git -C ~/Code/"$n" log -3 --oneline 2>/dev/null')
-    name=$(printf '%s' "$line" | cut -d'|' -f2 | xargs)
-  else
-    name=$(command ls ~/Code | fzf)
-  fi
-  [[ -n $name && -d $root/$name ]] && cd "$root/$name"
-}
+# atuin: fuzzy, syncable shell history. Takes over ^R, so it must load AFTER
+# fzf above or fzf's ^R would win. It also prepends its own strategy to
+# ZSH_AUTOSUGGEST_STRATEGY, making the synced atuin DB the first source of
+# autosuggestions.
+command -v atuin >/dev/null && eval "$(atuin init zsh)"
 
-# List catalog rows, optionally filtered: projlist [active|idle|stale|dormant|
-# ancient|renamed|needs|clone|own|local|<any substring>]. Aliased as `list`.
-projlist() {
-  local catalog=~/Code/PROJECTS.md
-  [[ -f $catalog ]] || { print -u2 "projlist: $catalog not found"; return 1 }
-  awk -F'|' -v q="${1:-}" '/^\|/ && $2 !~ /Project/ && $2 !~ /^[ :-]*$/ {
-      s=$3; gsub(/^ +| +$/,"",s)
-      if (q=="" || s==q || index($0,q)) print
-    }' "$catalog" | column -t -s'|'
-}
-alias list=projlist
+# Per-session cheat sheet for the toolkit; `newtools table` for the comparison.
+command -v newtools >/dev/null && newtools
+# --- end Modern CLI toolkit ---
 
-# Browse the catalog rendered as markdown (glow pager; falls back to $PAGER).
-projects() {
-  if command -v glow >/dev/null; then
-    glow -p -w ${COLUMNS:-160} ~/Code/PROJECTS.md
-  else
-    ${PAGER:-less} ~/Code/PROJECTS.md
-  fi
-}
-
-# Banner when a shell lands exactly on ~/Code.
-_code_catalog_banner() {
-  [[ $PWD == ~/Code && -f ~/Code/PROJECTS.md ]] || return 0
-  awk -F'\\|' '/^\|/ && $2 !~ /Project/ && $2 !~ /^[ :-]*$/ {
-      s=$3; gsub(/^ +| +$/,"",s); c[s]++; total++
-      d=$4; gsub(/^ +| +$/,"",d); if (d=="") nodesc++
-    }
-    END {
-      printf "📁 %d projects", total
-      n=split("active idle stale dormant ancient renamed", t, " ")
-      for (i=1;i<=n;i++) if (c[t[i]]) printf " · %d %s", c[t[i]], t[i]
-      if (nodesc) printf " · %d undescribed", nodesc
-      print "\n   proj → fuzzy-pick & cd (^t: by commit · ^y: by change · ^r: status order)"
-      print "   list [status|text] → filtered table · z <name> → jump from anywhere"
-      print "   projects → browse catalog (glow) · code-catalog-refresh → manual refresh"
-    }' ~/Code/PROJECTS.md
-}
-autoload -U add-zsh-hook
-add-zsh-hook chpwd _code_catalog_banner
-_code_catalog_banner
-# --- end ~/Code project catalog ---
+# --- projects (code-sync) ---
+# `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
+# the status block printed when a shell lands on ~/Code. This replaced the old
+# fswatch-based PROJECTS.md catalog -- there is no resident daemon any more.
+#
+# code-sync's own install.sh rewrites this marker-delimited region in place (and
+# strips the retired catalog block if it finds one), so it may end up rewritten
+# to an absolute path. Edit the helpers in code-sync, not here.
+[[ -f "$HOME/Code/code-sync/shell/proj.sh" ]] && . "$HOME/Code/code-sync/shell/proj.sh"
+# --- end projects ---
 
 # --- Tab accepts the autosuggestion ---
 # Tab accepts the grey suggestion when one is showing and the cursor sits at end
 # of line; otherwise it falls through to normal completion.
 #
-# MUST STAY LAST IN THIS FILE. It captures whichever widget currently owns ^I
-# rather than hardcoding one, because `fzf --zsh` rebinds Tab to fzf-completion
-# further up -- hardcoding expand-or-complete here would silently kill fzf's
-# `**<TAB>` fuzzy trigger. Anything bound to ^I after this block wins, so new
-# Tab-binding tools (fzf-tab, etc.) must be added above it.
+# MUST RUN AFTER EVERYTHING THAT BINDS ^I. It captures whichever widget owns ^I
+# at this point rather than hardcoding one, because `fzf --zsh` rebinds Tab to
+# fzf-completion further up -- hardcoding expand-or-complete here would silently
+# kill fzf's `**<TAB>` fuzzy trigger. Whatever binds ^I last wins, so any new
+# Tab-binding tool (fzf-tab, etc.) has to be added above this block.
+#
+# Keep it at the end of the file. code-sync's install.sh appends its `projects`
+# block below this one on reinstall, which is harmless -- that block binds Esc-s,
+# never Tab -- but nothing that touches ^I may go there.
 if (( ${+functions[_zsh_autosuggest_start]} )); then
   _tab_orig_widget="${$(bindkey '^I')##* }"
   [[ -z "$_tab_orig_widget" || "$_tab_orig_widget" == "undefined-key" ]] \
