@@ -19,6 +19,21 @@ DISABLE_COMPFIX=true
 # Custom:  $ZSH_CUSTOM/plugins/
 plugins=(git python macos virtualenv)
 
+# Inline autosuggestions (grey ghost text from history) + command syntax
+# highlighting. Cloned into $ZSH_CUSTOM/plugins by the setup script; appended
+# only when present so a bare .zshrc copy still starts cleanly without them.
+# Order matters: fast-syntax-highlighting must come LAST -- it wraps every ZLE
+# widget defined before it -- and zsh-autosuggestions must immediately precede it.
+for _omz_plugin in zsh-autosuggestions fast-syntax-highlighting; do
+  [[ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/$_omz_plugin" ]] && plugins+=("$_omz_plugin")
+done
+unset _omz_plugin
+
+# Suggest from shell history, falling back to completions when history misses.
+# atuin, when installed, prepends its own strategy to this array at init time,
+# so suggestions come from the synced atuin DB first.
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+
 # Homebrew zsh completions — must join fpath BEFORE oh-my-zsh runs compinit
 [[ -d /opt/homebrew/share/zsh/site-functions ]] && fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
 
@@ -266,3 +281,29 @@ autoload -U add-zsh-hook
 add-zsh-hook chpwd _code_catalog_banner
 _code_catalog_banner
 # --- end ~/Code project catalog ---
+
+# --- Tab accepts the autosuggestion ---
+# Tab accepts the grey suggestion when one is showing and the cursor sits at end
+# of line; otherwise it falls through to normal completion.
+#
+# MUST STAY LAST IN THIS FILE. It captures whichever widget currently owns ^I
+# rather than hardcoding one, because `fzf --zsh` rebinds Tab to fzf-completion
+# further up -- hardcoding expand-or-complete here would silently kill fzf's
+# `**<TAB>` fuzzy trigger. Anything bound to ^I after this block wins, so new
+# Tab-binding tools (fzf-tab, etc.) must be added above it.
+if (( ${+functions[_zsh_autosuggest_start]} )); then
+  _tab_orig_widget="${$(bindkey '^I')##* }"
+  [[ -z "$_tab_orig_widget" || "$_tab_orig_widget" == "undefined-key" ]] \
+    && _tab_orig_widget=expand-or-complete
+
+  _tab_accept_or_complete() {
+    if [[ -n "$POSTDISPLAY" ]] && (( CURSOR == ${#BUFFER} )); then
+      zle autosuggest-accept
+    else
+      zle "$_tab_orig_widget"
+    fi
+  }
+  zle -N _tab_accept_or_complete
+  bindkey '^I' _tab_accept_or_complete
+fi
+# --- end Tab accepts the autosuggestion ---

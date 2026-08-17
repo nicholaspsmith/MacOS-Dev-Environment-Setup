@@ -230,7 +230,37 @@ class MacOSDevSetup:
         else:
             self.add_failure("Oh My Zsh installation failed")
             return False
-        
+
+    def install_zsh_plugins(self):
+        """Clone the custom Oh My Zsh plugins that .zshrc opts into.
+
+        Not Homebrew packages — .zshrc looks for these under $ZSH_CUSTOM/plugins
+        and appends them to `plugins` only if the directory exists, so a machine
+        without them still starts a clean shell (just without ghost text)."""
+        print("📦 Installing zsh plugins (autosuggestions, syntax highlighting)...")
+
+        custom_plugins = Path.home() / '.oh-my-zsh' / 'custom' / 'plugins'
+        if not (Path.home() / '.oh-my-zsh').exists():
+            self.add_failure("zsh plugins skipped (Oh My Zsh not installed)")
+            return False
+        custom_plugins.mkdir(parents=True, exist_ok=True)
+
+        plugins = [
+            ('zsh-autosuggestions',
+             'https://github.com/zsh-users/zsh-autosuggestions.git'),
+            ('fast-syntax-highlighting',
+             'https://github.com/zdharma-continuum/fast-syntax-highlighting.git'),
+        ]
+
+        all_ok = True
+        for name, url in plugins:
+            if self.clone_or_update_repo(url, custom_plugins / name):
+                self.add_success(f"{name} ready")
+            else:
+                self.add_failure(f"{name} clone failed (no inline suggestions)")
+                all_ok = False
+        return all_ok
+
     def copy_zshrc(self):
         """Copy .zshrc into place and clone fzf-git.sh, which it sources"""
         source_zshrc = Path(__file__).parent / 'zsh' / '.zshrc'
@@ -791,6 +821,7 @@ class MacOSDevSetup:
             ("Brew Bundle", "Curated Brewfile: CLI tools, casks, fonts", self.install_brew_bundle),
             ("ZSH Shell", "Z Shell (should already be default)", self.install_zsh),
             ("Oh My Zsh", "ZSH framework for terminal customization", self.install_oh_my_zsh),
+            ("Zsh plugins", "Inline autosuggestions + fast syntax highlighting", self.install_zsh_plugins),
             ("Copy .zshrc config", "Custom ZSH configuration + fzf-git.sh", self.copy_zshrc),
             ("NVM & Node.js LTS", "Node Version Manager (Homebrew) and Node.js", self.install_nvm),
             ("iTerm2 Quake profile", "Hotkey dropdown profile via DynamicProfiles", self.install_iterm_profile),
