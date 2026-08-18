@@ -263,6 +263,84 @@ if (( ${+functions[_zsh_autosuggest_start]} )); then
 fi
 # --- end Tab accepts the autosuggestion ---
 
+# --- inline history cycling, overflowing into atuin ---
+# ↑/↓ walk in place through the history entries that start with whatever is
+# already typed. Run off the far end going up and atuin's full-screen search
+# takes over, pre-filtered with that same text; come back down past the newest
+# match and the line you actually typed is restored verbatim.
+#
+# Hand-rolled rather than zsh-history-substring-search: that plugin has no
+# concept of "out of matches", which is precisely the hand-off this needs.
+# Candidates come from atuin, so the cycle agrees with the grey ghost text
+# rather than drawing on a second, unsynced history.
+
+typeset -g  _hcyc_typed=''      # what the user actually typed
+typeset -ga _hcyc_hits=()       # candidates, newest first
+typeset -gi _hcyc_i=0           # 0 = the typed text, 1..N = candidates
+typeset -g  _hcyc_shown=$'\0'   # last buffer we wrote, to notice hand edits
+typeset -gi _hcyc_limit=50      # cycle depth before atuin takes over
+
+_hcyc_load() {
+  _hcyc_typed=$BUFFER
+  local -a raw
+  if command -v atuin >/dev/null; then
+    # atuin prints oldest-first; (Oa) flips the array to newest-first.
+    raw=( ${(Oa)${(f)"$(atuin search --search-mode prefix --limit $_hcyc_limit \
+                          --cmd-only -- "$BUFFER" 2>/dev/null)"}} )
+  fi
+  raw=( ${raw:#} )                                  # drop blank lines
+  if (( ! $#raw )); then                            # no atuin, or it found nothing
+    raw=( ${(M)${(f)"$(fc -lnr 1 2>/dev/null)"}:#${(b)BUFFER}*} )
+    raw=( ${raw:#} )
+  fi
+  # (b) quotes glob characters so a stray [ or * in the line is not a pattern.
+  _hcyc_hits=( ${(u)${raw:#${(b)_hcyc_typed}}} )    # dedupe, drop the typed text
+  _hcyc_i=0
+}
+
+_hcyc_put() {
+  BUFFER=$1; CURSOR=$#BUFFER; _hcyc_shown=$BUFFER
+  # This widget is wrapped by neither plugin (both bind at load, we define after),
+  # so clear the stale ghost text and re-run highlighting by hand.
+  POSTDISPLAY=''
+  (( ${+functions[_zsh_highlight]} )) && _zsh_highlight
+}
+
+_hcyc_up() {
+  [[ $BUFFER == *$'\n'* ]] && { zle up-line-or-history; return }
+  # Bare ↑ on an empty line keeps its old meaning: straight into atuin.
+  [[ -z $BUFFER && $BUFFER != $_hcyc_shown ]] && { zle atuin-up-search; return }
+  [[ $BUFFER != $_hcyc_shown ]] && _hcyc_load
+  if (( _hcyc_i >= $#_hcyc_hits )); then            # out of candidates
+    _hcyc_put "$_hcyc_typed"                        # hand atuin the typed text
+    _hcyc_shown=$'\0'
+    zle atuin-up-search
+    return
+  fi
+  (( _hcyc_i++ ))
+  _hcyc_put "$_hcyc_hits[_hcyc_i]"
+}
+
+_hcyc_down() {
+  [[ $BUFFER == *$'\n'* ]] && { zle down-line-or-history; return }
+  if [[ $BUFFER != $_hcyc_shown ]]; then            # not cycling yet -> enter it
+    _hcyc_load
+    (( $#_hcyc_hits )) || return
+    _hcyc_i=1; _hcyc_put "$_hcyc_hits[1]"; return
+  fi
+  if (( _hcyc_i <= 1 )); then                       # back past the newest match
+    _hcyc_i=0; _hcyc_put "$_hcyc_typed"; return
+  fi
+  (( _hcyc_i-- ))
+  _hcyc_put "$_hcyc_hits[_hcyc_i]"
+}
+
+zle -N _hcyc_up
+zle -N _hcyc_down
+bindkey '^[[A' _hcyc_up   ; bindkey '^[OA' _hcyc_up
+bindkey '^[[B' _hcyc_down ; bindkey '^[OB' _hcyc_down
+# --- end inline history cycling ---
+
 # --- projects (code-sync) ---
 # `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
 # the status block printed when a shell lands on ~/Code. This replaced the old
