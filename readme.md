@@ -44,7 +44,7 @@ on a machine that might not have Homebrew yet.)
 | 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
-| 5 | Zsh plugins | clones `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
+| 5 | Zsh plugins | clones `fzf-tab`, `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
 | 6 | Copy .zshrc | installs `zsh/.zshrc` (backs up your old one to `~/.zshrc.backup`) and clones `fzf-git.sh` |
 | 7 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
 | 8 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
@@ -81,12 +81,14 @@ and Warp, without leaving zsh:
 - **`zsh-autosuggestions`** — suggests as you type from your shell history.
 - **`fast-syntax-highlighting`** — colors commands live, so a typo shows up red
   before you press Enter.
+- **`fzf-tab`** — Tab completion as an fzf picker: every candidate the
+  completion system knows, with descriptions, fuzzy-searchable.
 
 Keys, once installed:
 
 | Key | Effect |
 |---|---|
-| `Tab` | accept the whole suggestion — falls through to normal completion when no suggestion is showing |
+| `Tab` | at a word boundary (line ends in a space), open the fzf-tab completion menu; otherwise accept the suggestion, falling through to completion when none is showing |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
 | `↓` / `↑` | walk forward / back through the other matches (below) |
@@ -111,6 +113,32 @@ The grey ghost text is **candidate 1**. From there:
 - If no ghost is showing (nothing matched), the first `↓` starts at candidate 1
   instead of 2, so no option is skipped.
 - In a multi-line buffer, both arrows keep their normal line-movement behavior.
+
+### History vs. completions
+
+Two different questions, deliberately on two different keys:
+
+- **Arrows = history.** "What did I run before?" atuin plus zsh's `HISTFILE`.
+  Neither knows what flags a command accepts — atuin is a history database.
+- **Tab = completions.** "What can this command do?" fzf-tab renders the
+  completion system's candidates, so `brew <TAB>` offers all 194 subcommands
+  with their descriptions, fuzzy-searchable.
+
+The Tab chain resolves itself and is worth not disturbing. fzf-tab binds `^I`
+when it loads; `fzf --zsh` then rebinds `^I` to `fzf-completion` but first
+records the previous owner in `$fzf_default_completion`, so it delegates back
+to fzf-tab whenever the line has no `**` trigger. Our widget then captures
+`fzf-completion` as *its* fallback. All three coexist:
+
+| You type | You get |
+|---|---|
+| `brew <TAB>` | fzf-tab menu of brew's subcommands |
+| `vim **<TAB>` | fzf's fuzzy path search |
+| `git chec<TAB>` (ghost showing) | the suggestion accepted |
+
+Note that completion candidates come in the completion function's order, not by
+how often *you* use them — nothing off the shelf ranks by personal frequency.
+Type a few characters in the fzf picker instead of hunting alphabetically.
 
 Candidates come from **atuin**, not zsh's own history, so the cycle agrees with
 the grey ghost text instead of drawing on a second unsynced source. It falls
