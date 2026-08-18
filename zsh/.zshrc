@@ -282,19 +282,26 @@ typeset -gi _hcyc_limit=50      # cycle depth before atuin takes over
 
 _hcyc_load() {
   _hcyc_typed=$BUFFER
-  local -a raw
+  local -a raw hist
+  # atuin first: recent, and synced across machines. --filter-mode global is
+  # explicit because session/directory modes return almost nothing here.
   if command -v atuin >/dev/null; then
     # atuin prints oldest-first; (Oa) flips the array to newest-first.
-    raw=( ${(Oa)${(f)"$(atuin search --search-mode prefix --limit $_hcyc_limit \
-                          --cmd-only -- "$BUFFER" 2>/dev/null)"}} )
+    raw=( ${(Oa)${(f)"$(atuin search --search-mode prefix --filter-mode global \
+                          --limit $_hcyc_limit --cmd-only -- "$BUFFER" 2>/dev/null)"}} )
   fi
+  # Then zsh's own HISTFILE, APPENDED rather than used as a fallback. atuin's DB
+  # only goes back to whenever atuin was installed (weeks), while HISTFILE goes
+  # back years -- so atuin returning *a* match is not the same as it having them
+  # all. Treating it as a fallback made `brew` cycle through exactly one entry,
+  # the very one already showing as ghost text.
+  hist=( ${(M)${(f)"$(fc -lnr 1 2>/dev/null)"}:#${(b)BUFFER}*} )
+  raw=( $raw $hist )
   raw=( ${raw:#} )                                  # drop blank lines
-  if (( ! $#raw )); then                            # no atuin, or it found nothing
-    raw=( ${(M)${(f)"$(fc -lnr 1 2>/dev/null)"}:#${(b)BUFFER}*} )
-    raw=( ${raw:#} )
-  fi
   # (b) quotes glob characters so a stray [ or * in the line is not a pattern.
+  # (u) dedupes keeping first occurrence, so atuin's recent hits stay on top.
   _hcyc_hits=( ${(u)${raw:#${(b)_hcyc_typed}}} )    # dedupe, drop the typed text
+  (( $#_hcyc_hits > _hcyc_limit )) && _hcyc_hits=( ${_hcyc_hits[1,_hcyc_limit]} )
   _hcyc_i=0
 }
 
