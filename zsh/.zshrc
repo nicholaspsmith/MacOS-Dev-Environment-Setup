@@ -309,8 +309,8 @@ _hcyc_put() {
 _hcyc_up() {
   [[ $BUFFER == *$'\n'* ]] && { zle up-line-or-history; return }
   # Bare ↑ on an empty line keeps its old meaning: straight into atuin.
-  [[ -z $BUFFER && $BUFFER != $_hcyc_shown ]] && { zle atuin-up-search; return }
-  [[ $BUFFER != $_hcyc_shown ]] && _hcyc_load
+  [[ -z $BUFFER && $BUFFER != "$_hcyc_shown" ]] && { zle atuin-up-search; return }
+  [[ $BUFFER != "$_hcyc_shown" ]] && _hcyc_load
   if (( _hcyc_i >= $#_hcyc_hits )); then            # out of candidates
     _hcyc_put "$_hcyc_typed"                        # hand atuin the typed text
     _hcyc_shown=$'\0'
@@ -323,7 +323,7 @@ _hcyc_up() {
 
 _hcyc_down() {
   [[ $BUFFER == *$'\n'* ]] && { zle down-line-or-history; return }
-  if [[ $BUFFER != $_hcyc_shown ]]; then            # not cycling yet -> enter it
+  if [[ $BUFFER != "$_hcyc_shown" ]]; then            # not cycling yet -> enter it
     _hcyc_load
     (( $#_hcyc_hits )) || return
     _hcyc_i=1; _hcyc_put "$_hcyc_hits[1]"; return
