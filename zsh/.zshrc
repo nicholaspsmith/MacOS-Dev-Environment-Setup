@@ -264,15 +264,21 @@ fi
 # --- end Tab accepts the autosuggestion ---
 
 # --- inline history cycling, overflowing into atuin ---
-# ↑/↓ walk in place through the history entries that start with whatever is
-# already typed. Run off the far end going up and atuin's full-screen search
-# takes over, pre-filtered with that same text; come back down past the newest
-# match and the line you actually typed is restored verbatim.
+# Standard shell direction: ↑ goes older, ↓ goes newer. Both walk in place
+# through the history entries that start with whatever is already typed (or
+# through all of history, when the line is empty).
+#
+#   ↑            step to the next older match -- repeat to keep digging
+#   ↑ past end   atuin's full-screen search takes over, pre-filtered with the
+#                text you typed rather than whichever candidate was on screen
+#   ↓            step back toward the newest match
+#   ↓ past that  restores the line you actually typed, verbatim
+#   ↓ not cycling  falls through to the normal down-line-or-history
 #
 # Hand-rolled rather than zsh-history-substring-search: that plugin has no
 # concept of "out of matches", which is precisely the hand-off this needs.
-# Candidates come from atuin, so the cycle agrees with the grey ghost text
-# rather than drawing on a second, unsynced history.
+# Candidates are atuin's recent/synced entries first, then zsh's much deeper
+# HISTFILE -- see _hcyc_load for why one cannot stand in for the other.
 
 typeset -g  _hcyc_typed=''      # what the user actually typed
 typeset -ga _hcyc_hits=()       # candidates, newest first
@@ -313,32 +319,39 @@ _hcyc_put() {
   (( ${+functions[_zsh_highlight]} )) && _zsh_highlight
 }
 
-_hcyc_up() {
+_hcyc_up() {                                        # back up the list, then atuin
   [[ $BUFFER == *$'\n'* ]] && { zle up-line-or-history; return }
-  # Bare ↑ on an empty line keeps its old meaning: straight into atuin.
-  [[ -z $BUFFER && $BUFFER != "$_hcyc_shown" ]] && { zle atuin-up-search; return }
-  [[ $BUFFER != "$_hcyc_shown" ]] && _hcyc_load
-  if (( _hcyc_i >= $#_hcyc_hits )); then            # out of candidates
-    _hcyc_put "$_hcyc_typed"                        # hand atuin the typed text
+  # Not cycling: we are already sitting at candidate 1 (whatever the ghost text
+  # is showing), so there is nothing above it but atuin. BUFFER is still the
+  # typed text here, which is exactly what atuin should be seeded with.
+  if [[ $BUFFER != "$_hcyc_shown" ]]; then
     _hcyc_shown=$'\0'
     zle atuin-up-search
     return
   fi
-  (( _hcyc_i++ ))
+  # Cycling, and back at the top of the list: restore the typed text so atuin
+  # is filtered by what was typed rather than by whichever candidate is showing.
+  if (( _hcyc_i <= 1 )); then
+    _hcyc_put "$_hcyc_typed"
+    _hcyc_shown=$'\0'
+    zle atuin-up-search
+    return
+  fi
+  (( _hcyc_i-- ))
   _hcyc_put "$_hcyc_hits[_hcyc_i]"
 }
 
-_hcyc_down() {
+_hcyc_down() {                                      # deeper: the next suggestion
   [[ $BUFFER == *$'\n'* ]] && { zle down-line-or-history; return }
-  if [[ $BUFFER != "$_hcyc_shown" ]]; then            # not cycling yet -> enter it
+  if [[ $BUFFER != "$_hcyc_shown" ]]; then          # fresh line or hand-edited
     _hcyc_load
-    (( $#_hcyc_hits )) || return
-    _hcyc_i=1; _hcyc_put "$_hcyc_hits[1]"; return
+    (( $#_hcyc_hits )) || { zle down-line-or-history; return }
+    # A ghost suggestion on screen already IS candidate 1, so the first press
+    # should reveal candidate 2. With no ghost showing, start at 1 instead.
+    [[ -n $POSTDISPLAY ]] && _hcyc_i=1 || _hcyc_i=0
   fi
-  if (( _hcyc_i <= 1 )); then                       # back past the newest match
-    _hcyc_i=0; _hcyc_put "$_hcyc_typed"; return
-  fi
-  (( _hcyc_i-- ))
+  (( _hcyc_i >= $#_hcyc_hits )) && return           # deepest already; stay put
+  (( _hcyc_i++ ))
   _hcyc_put "$_hcyc_hits[_hcyc_i]"
 }
 
