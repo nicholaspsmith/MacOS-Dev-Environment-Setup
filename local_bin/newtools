@@ -38,7 +38,7 @@ table() {
     "$C" hyperfine "$R" "time"              "real benchmarking: warmups, many runs, statistical comparison" \
     "$C" jq        "$R" "JSON squinting"    "query/transform JSON from the shell; pairs with xh" \
     "$C" lazygit   "$R" "git CLI juggling"  "full git TUI: stage hunks, rebase, branch — keyboard-driven" \
-    "$C" llm       "$R" "cloud coding AI"   "Qwen3.8-27B via Ollama — Claude Code/Qwen Code/REPL, offline" \
+    "$C" llm       "$R" "cloud coding AI"   "Qwen3.8-27B via Ollama, offline (Mac; no Ollama on dino)" \
     "$C" mosh      "$R" "ssh"               "survives sleep, roaming, and IP changes; pair with tmux" \
     "$C" nvim      "$R" "vim"               "faster, Lua config, built-in LSP (Mac; not installed on dino)" \
     "$C" rg        "$R" "grep"              "10-100x faster; skips .gitignore'd files by default" \

@@ -232,17 +232,6 @@ command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v newtools >/dev/null && newtools
 # --- end Modern CLI toolkit ---
 
-# --- projects (code-sync) ---
-# `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
-# the status block printed when a shell lands on ~/Code. This replaced the old
-# fswatch-based PROJECTS.md catalog -- there is no resident daemon any more.
-#
-# code-sync's own install.sh rewrites this marker-delimited region in place (and
-# strips the retired catalog block if it finds one), so it may end up rewritten
-# to an absolute path. Edit the helpers in code-sync, not here.
-[[ -f "$HOME/Code/code-sync/shell/proj.sh" ]] && . "$HOME/Code/code-sync/shell/proj.sh"
-# --- end projects ---
-
 # --- Tab accepts the autosuggestion ---
 # Tab accepts the grey suggestion when one is showing and the cursor sits at end
 # of line; otherwise it falls through to normal completion.
@@ -253,9 +242,10 @@ command -v newtools >/dev/null && newtools
 # kill fzf's `**<TAB>` fuzzy trigger. Whatever binds ^I last wins, so any new
 # Tab-binding tool (fzf-tab, etc.) has to be added above this block.
 #
-# Keep it at the end of the file. code-sync's install.sh appends its `projects`
-# block below this one on reinstall, which is harmless -- that block binds Esc-s,
-# never Tab -- but nothing that touches ^I may go there.
+# The `projects` block below is the one exception: code-sync's install.sh always
+# appends it to the end of the file, so this block cannot be literally last on a
+# fully-installed machine. That is fine -- it binds Esc-s, never ^I. Nothing that
+# touches ^I may go below here.
 if (( ${+functions[_zsh_autosuggest_start]} )); then
   _tab_orig_widget="${$(bindkey '^I')##* }"
   [[ -z "$_tab_orig_widget" || "$_tab_orig_widget" == "undefined-key" ]] \
@@ -272,3 +262,16 @@ if (( ${+functions[_zsh_autosuggest_start]} )); then
   bindkey '^I' _tab_accept_or_complete
 fi
 # --- end Tab accepts the autosuggestion ---
+
+# --- projects (code-sync) ---
+# `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
+# the status block printed when a shell lands on ~/Code. This replaced the old
+# fswatch-based PROJECTS.md catalog -- there is no resident daemon any more.
+#
+# Lives LAST because code-sync's install.sh rewrites this marker-delimited region
+# by stripping it and re-appending at end-of-file. Keeping it here means the
+# shipped file already matches what a fully-installed machine looks like, so
+# component 18 is a no-op on ordering instead of a reshuffle. install.sh also
+# rewrites the path below to an absolute one. Edit the helpers in code-sync.
+[[ -f "$HOME/Code/code-sync/shell/proj.sh" ]] && . "$HOME/Code/code-sync/shell/proj.sh"
+# --- end projects ---
