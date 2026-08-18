@@ -24,7 +24,7 @@ plugins=(git python macos virtualenv)
 # only when present so a bare .zshrc copy still starts cleanly without them.
 # Order matters: fast-syntax-highlighting must come LAST -- it wraps every ZLE
 # widget defined before it -- and zsh-autosuggestions must immediately precede it.
-for _omz_plugin in zsh-autosuggestions fast-syntax-highlighting; do
+for _omz_plugin in fzf-tab zsh-autosuggestions fast-syntax-highlighting; do
   [[ -d "${ZSH_CUSTOM:-$ZSH/custom}/plugins/$_omz_plugin" ]] && plugins+=("$_omz_plugin")
 done
 unset _omz_plugin
@@ -208,6 +208,39 @@ fi
 
 [[ -f ~/Code/fzf-git.sh/fzf-git.sh ]] && source ~/Code/fzf-git.sh/fzf-git.sh
 
+# --- fzf-tab ---
+# Tab completion rendered as an fzf picker: every candidate the completion
+# system knows about, with its description, fuzzy-searchable. This is where
+# contextual options live (`brew <TAB>` lists all 194 subcommands); the arrow
+# keys stay on history, which is a different question with a different answer.
+#
+# Wiring, which is entirely automatic and worth not breaking:
+#   * fzf-tab is loaded from plugins=() above -- after compinit, and before
+#     zsh-autosuggestions / fast-syntax-highlighting, which wrap widgets.
+#   * It binds ^I. Then `fzf --zsh` (further up) rebinds ^I to fzf-completion,
+#     but first records the previous owner in $fzf_default_completion -- so it
+#     falls back to fzf-tab whenever the line has no `**` trigger. Both survive:
+#     `brew <TAB>` gets the fzf-tab menu, `vim **<TAB>` gets fzf's path search.
+#   * The Tab widget at the end of this file then captures fzf-completion as
+#     its own fallback, so an accepted suggestion still wins over both.
+# fzf-tab drives the menu itself, so zsh must not also draw one. oh-my-zsh sets
+# `menu select` at ':completion:*:*:*:*:*', which is MORE specific than
+# ':completion:*' and would win on zstyle's most-specific-match rule -- so the
+# override has to name that exact pattern too, not just the general one.
+zstyle ':completion:*' menu no
+zstyle ':completion:*:*:*:*:*' menu no
+# Group headers, so `brew <TAB>` separates subcommands from flags.
+zstyle ':completion:*:descriptions' format '[%d]'
+zstyle ':fzf-tab:*' switch-group '<' '>'
+# Colorise filename completions the way ls does.
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+# Preview the directory you are about to cd into.
+command -v eza >/dev/null && \
+  zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'
+# git checkout candidates are already in a meaningful order; do not re-sort.
+zstyle ':completion:*:git-checkout:*' sort false
+# --- end fzf-tab ---
+
 command -v direnv >/dev/null && eval "$(direnv hook zsh)"
 
 # Home server (Tailscale-only host; needs an ~/.ssh/config entry). mosh survives
@@ -252,7 +285,11 @@ if (( ${+functions[_zsh_autosuggest_start]} )); then
     && _tab_orig_widget=expand-or-complete
 
   _tab_accept_or_complete() {
-    if [[ -n "$POSTDISPLAY" ]] && (( CURSOR == ${#BUFFER} )); then
+    # At a word boundary -- the line ends in a space -- the useful answer is the
+    # completion list for the NEXT word: `brew <TAB>` should offer brew's 194
+    # subcommands, not swallow a whole history line. Everywhere else, an
+    # on-screen suggestion is the thing Tab should accept.
+    if [[ -n "$POSTDISPLAY" ]] && (( CURSOR == ${#BUFFER} )) && [[ $BUFFER != *' ' ]]; then
       zle autosuggest-accept
     else
       zle "$_tab_orig_widget"

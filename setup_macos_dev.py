@@ -245,7 +245,11 @@ class MacOSDevSetup:
             return False
         custom_plugins.mkdir(parents=True, exist_ok=True)
 
+        # Order here is cosmetic; load order is fixed by plugins=() in .zshrc,
+        # where fzf-tab must precede the two widget-wrapping plugins.
         plugins = [
+            ('fzf-tab',
+             'https://github.com/Aloxaf/fzf-tab.git'),
             ('zsh-autosuggestions',
              'https://github.com/zsh-users/zsh-autosuggestions.git'),
             ('fast-syntax-highlighting',
@@ -859,7 +863,7 @@ class MacOSDevSetup:
             ("Brew Bundle", "Curated Brewfile: CLI tools, casks, fonts", self.install_brew_bundle),
             ("ZSH Shell", "Z Shell (should already be default)", self.install_zsh),
             ("Oh My Zsh", "ZSH framework for terminal customization", self.install_oh_my_zsh),
-            ("Zsh plugins", "Inline autosuggestions + fast syntax highlighting", self.install_zsh_plugins),
+            ("Zsh plugins", "fzf-tab, inline autosuggestions, syntax highlighting", self.install_zsh_plugins),
             ("Copy .zshrc config", "Custom ZSH configuration + fzf-git.sh", self.copy_zshrc),
             ("NVM & Node.js LTS", "Node Version Manager (Homebrew) and Node.js", self.install_nvm),
             ("iTerm2 Quake profile", "Hotkey dropdown profile via DynamicProfiles", self.install_iterm_profile),
