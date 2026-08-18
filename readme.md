@@ -89,9 +89,34 @@ Keys, once installed:
 | `Tab` | accept the whole suggestion — falls through to normal completion when no suggestion is showing |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
+| `↑` / `↓` | cycle inline through the *other* matches (below) |
 
 Acceptance only fires with the cursor at end of line; mid-line, `→` just moves
 the cursor as usual.
+
+### Cycling to the other matches
+
+The suggestion is a single guess. `↑`/`↓` walk in place through the other
+history entries that start with what you've typed:
+
+- `↓` from a fresh line **enters** the cycle at the most recent match.
+- `↑` walks further back in time; `↓` walks forward again.
+- Past the newest match, `↓` restores **exactly what you typed**, verbatim.
+- Past the oldest match, `↑` hands off to **atuin's full-screen search**,
+  pre-filtered with your typed text rather than with a candidate. Depth before
+  the hand-off is `_hcyc_limit` (default 50).
+- Bare `↑` on an empty line keeps its old meaning: straight into atuin.
+- In a multi-line buffer, both arrows keep their normal line-movement behavior.
+
+Candidates come from **atuin**, not zsh's own history, so the cycle agrees with
+the grey ghost text instead of drawing on a second unsynced source. It falls
+back to `fc` when atuin isn't installed.
+
+This is hand-rolled rather than `zsh-history-substring-search`, which has no
+concept of "out of matches" — and that boundary is the whole point of the
+hand-off. The widget is defined after both plugins bind theirs, so it clears
+`POSTDISPLAY` and calls `_zsh_highlight` itself; without those two lines the
+ghost text and the syntax colors go stale as you cycle.
 
 Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
 
