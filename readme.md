@@ -89,7 +89,7 @@ Keys, once installed:
 | `Tab` | accept the whole suggestion — falls through to normal completion when no suggestion is showing |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
-| `↑` / `↓` | cycle inline through the *other* matches (below) |
+| `↓` / `↑` | walk forward / back through the other matches (below) |
 
 Acceptance only fires with the cursor at end of line; mid-line, `→` just moves
 the cursor as usual.
@@ -99,13 +99,17 @@ the cursor as usual.
 The suggestion is a single guess. `↑`/`↓` walk in place through the other
 history entries that start with what you've typed:
 
-- `↓` from a fresh line **enters** the cycle at the most recent match.
-- `↑` walks further back in time; `↓` walks forward again.
-- Past the newest match, `↓` restores **exactly what you typed**, verbatim.
-- Past the oldest match, `↑` hands off to **atuin's full-screen search**,
-  pre-filtered with your typed text rather than with a candidate. Depth before
-  the hand-off is `_hcyc_limit` (default 50).
-- Bare `↑` on an empty line keeps its old meaning: straight into atuin.
+The grey ghost text is **candidate 1**. From there:
+
+- `↓` reveals candidate 2, then 3, then 4 — one per press, digging deeper.
+- `↑` walks back up toward candidate 1.
+- `↑` **at candidate 1** — or before you've started cycling at all — opens
+  **atuin's full-screen search**, seeded with the text you typed rather than
+  whichever candidate happens to be on screen. `Esc` out of atuin and you're
+  back to your typed line.
+- `↓` at the deepest candidate stays put. Depth is `_hcyc_limit` (default 50).
+- If no ghost is showing (nothing matched), the first `↓` starts at candidate 1
+  instead of 2, so no option is skipped.
 - In a multi-line buffer, both arrows keep their normal line-movement behavior.
 
 Candidates come from **atuin**, not zsh's own history, so the cycle agrees with
