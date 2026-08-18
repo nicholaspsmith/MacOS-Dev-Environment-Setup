@@ -194,6 +194,8 @@ Two ordering constraints matter when re-running components:
 1. **Component 18 must run after component 6.** code-sync's `install.sh` edits
    `~/.zshrc` in place; copying the repo's `.zshrc` over it afterwards would
    discard that edit. The default order already does this.
-2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`, so
-   after a code-sync reinstall it sits below the Tab block. That's harmless —
-   it binds Esc-s, never `^I` — but nothing that rebinds Tab may go there.
+2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`, so it
+   always ends up below the Tab block. `zsh/.zshrc` ships in that same order, so
+   component 18 is a no-op on layout rather than a reshuffle. That block binds
+   Esc-s, never `^I`, so Tab is unaffected — but nothing that rebinds Tab may go
+   below it.
