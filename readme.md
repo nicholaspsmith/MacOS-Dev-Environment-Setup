@@ -52,6 +52,11 @@ If you wan't to install the dark/light theme switcher, you'll need to have XCode
 - Opens browser to GitHub sign-in page
 - Guides user through authentication process
 
+## ✅ beads (bd):
+- Installs beads via Homebrew (pulls in dolt as a dependency)
+- Issue tracker built for coding agents — `bd ready`, `bd create`, `bd close`
+- Run `bd init` inside a repo to start tracking; `bd prime` prints the full command reference
+
 # Key Features:
 ## 🔧 Smart Setup:
 - macOS 15+ compatibility check

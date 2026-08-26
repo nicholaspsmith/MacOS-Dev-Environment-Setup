@@ -708,6 +708,21 @@ DAYS_TO_KEEP={days_to_keep}
             self.add_failure("GitHub CLI installation failed")
             return False
     
+    def install_beads(self):
+        """Install beads (bd) - issue tracker for coding agents
+
+        Homebrew pulls in dolt automatically; beads keeps its issue database
+        in it rather than in flat files.
+        """
+        print("📦 Installing beads (bd)...")
+        result = self.run_command('brew install beads')
+        if result:
+            self.add_success("beads (bd) installed")
+            return True
+        else:
+            self.add_failure("beads (bd) installation failed")
+            return False
+
     def install_dark_mode_toggle(self):
         """Build and install ThemeToggle - a custom menu bar app for toggling dark mode"""
         print("📦 Building and installing ThemeToggle (Dark Mode Toggle)...")
@@ -908,6 +923,7 @@ DAYS_TO_KEEP={days_to_keep}
             ("VS Code Extensions", "Claude Code and Python extensions", self.configure_vscode_extensions),
             ("GitHub CLI", "GitHub command line tool", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI", self.setup_github_cli),
+            ("beads (bd)", "Issue tracker for coding agents", self.install_beads),
             ("Dark Mode Toggle", "NightOwl menu bar app for dark/light mode switching", self.install_dark_mode_toggle),
             ("Apple Media Tracking Killer", "Background process to disable media tracking", self.setup_kill_apple_media_tracking),
             ("Download Recycler", "Auto-clean old files from Downloads folder", self.setup_download_recycler),
