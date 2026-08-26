@@ -9,6 +9,7 @@
 brew "atuin"            # hooked in .zshrc — fuzzy synced history, owns ^R
 brew "bash"
 brew "bat"
+brew "beads"            # `bd` issue tracker for coding agents; pulls in dolt
 brew "btop"
 brew "coreutils"
 brew "direnv"            # hooked in .zshrc

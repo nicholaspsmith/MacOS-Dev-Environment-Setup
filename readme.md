@@ -41,7 +41,7 @@ on a machine that might not have Homebrew yet.)
 | # | Component | What it does |
 |---|---|---|
 | 1 | Homebrew | installs brew itself |
-| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
+| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, beads, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
 | 5 | Zsh plugins | clones `fzf-tab`, `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
