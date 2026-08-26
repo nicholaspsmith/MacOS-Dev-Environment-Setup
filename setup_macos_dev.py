@@ -34,6 +34,7 @@ MENU_BAR_APP_REPOS = [
     ('MacRecorder', 'https://github.com/nicholaspsmith/MacRecorder.git', 'MacRecorder.app'),
     ('media-tracking-killer-menubar', 'https://github.com/nicholaspsmith/media-tracking-killer-menubar.git', 'Media Tracking Killer.app'),
     ('download-recycler-menubar', 'https://github.com/nicholaspsmith/download-recycler-menubar.git', 'Download Recycler.app'),
+    ('claude-usage-menubar', 'https://github.com/nicholaspsmith/claude-usage-menubar.git', 'Claude Usage.app'),
 ]
 
 # launchd agents that older installs used for jobs the Swift apps now do

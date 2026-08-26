@@ -21,6 +21,7 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | MacRecorder.app | MacRecorder | needs Screen Recording (manual grant) |
 | Media Tracking Killer.app | media-tracking-killer-menubar | added 2026-07-14; replaces killapplemediatracking.sh |
 | Download Recycler.app | download-recycler-menubar | added 2026-07-14; replaces download_recycler.sh; needs Downloads access (manual grant) |
+| Claude Usage.app | claude-usage-menubar | added 2026-08-25; Claude Code plan limits; prompts once for the Claude Code-credentials keychain item |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
 | (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
 
