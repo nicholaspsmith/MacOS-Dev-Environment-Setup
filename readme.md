@@ -88,7 +88,7 @@ Keys, once installed:
 
 | Key | Effect |
 |---|---|
-| `Tab` | at a word boundary (line ends in a space), open the fzf-tab completion menu; otherwise accept the suggestion, falling through to completion when none is showing |
+| `Tab` | open the fzf-tab completion menu (a single match is inserted directly). Never accepts the ghost text — history suggestions can be stale paths |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
 | `↓` / `↑` | walk forward / back through the other matches (below) |
@@ -127,8 +127,7 @@ Two different questions, deliberately on two different keys:
 The Tab chain resolves itself and is worth not disturbing. fzf-tab binds `^I`
 when it loads; `fzf --zsh` then rebinds `^I` to `fzf-completion` but first
 records the previous owner in `$fzf_default_completion`, so it delegates back
-to fzf-tab whenever the line has no `**` trigger. Our widget then captures
-`fzf-completion` as *its* fallback. All three coexist:
+to fzf-tab whenever the line has no `**` trigger. Both coexist:
 
 | You type | You get |
 |---|---|
@@ -154,11 +153,13 @@ Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
 
 1. `fast-syntax-highlighting` must be the **last** entry in `plugins=(…)` — it
    wraps every ZLE widget defined before it.
-2. The Tab block must be the **last thing in the file**. It captures whichever
-   widget currently owns `^I` instead of hardcoding one, because `fzf --zsh`
-   rebinds Tab to `fzf-completion` earlier in the file; hardcoding
-   `expand-or-complete` there would silently break fzf's `**<TAB>` trigger. Any
-   new Tab-binding tool has to be added *above* that block.
+2. `fzf --zsh` must load **after** fzf-tab (it does: fzf-tab comes from
+   `plugins=(…)`, fzf's keybindings are sourced later). It records the previous
+   `^I` owner in `$fzf_default_completion` and delegates to it, so the order is
+   what keeps `**<TAB>` and the fzf-tab menu both working. Nothing else may
+   rebind `^I` — in particular Tab must never accept the autosuggestion: history
+   ghost text is not validated, so `cd m<TAB>` would happily insert a directory
+   that was renamed months ago (removed 2026-09-15 for exactly that reason).
 
 `.zshrc` appends the two plugins only if their directories exist, so a machine
 that skipped component 5 still starts a clean shell — just without ghost text.
@@ -206,7 +207,7 @@ launchctl list | grep nicholassmith        # custom agents loaded?
 brew bundle check --file=Brewfile          # Brewfile satisfied?
 gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
-bindkey '^I'                               # Tab -> _tab_accept_or_complete?
+bindkey '^I'                               # Tab -> fzf-completion (over fzf-tab)?
 projects                                   # ~/Code sync status block
 tail -5 ~/Library/Logs/code-sync.launchd.log     # sync agent healthy?
 tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail
@@ -251,8 +252,7 @@ Two ordering constraints matter when re-running components:
 1. **Component 18 must run after component 6.** code-sync's `install.sh` edits
    `~/.zshrc` in place; copying the repo's `.zshrc` over it afterwards would
    discard that edit. The default order already does this.
-2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`, so it
-   always ends up below the Tab block. `zsh/.zshrc` ships in that same order, so
-   component 18 is a no-op on layout rather than a reshuffle. That block binds
-   Esc-s, never `^I`, so Tab is unaffected — but nothing that rebinds Tab may go
-   below it.
+2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`.
+   `zsh/.zshrc` ships in that same order, so component 18 is a no-op on layout
+   rather than a reshuffle. That block binds Esc-s, never `^I`, so Tab is
+   unaffected.

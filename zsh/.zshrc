@@ -265,41 +265,6 @@ command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v newtools >/dev/null && newtools
 # --- end Modern CLI toolkit ---
 
-# --- Tab accepts the autosuggestion ---
-# Tab accepts the grey suggestion when one is showing and the cursor sits at end
-# of line; otherwise it falls through to normal completion.
-#
-# MUST RUN AFTER EVERYTHING THAT BINDS ^I. It captures whichever widget owns ^I
-# at this point rather than hardcoding one, because `fzf --zsh` rebinds Tab to
-# fzf-completion further up -- hardcoding expand-or-complete here would silently
-# kill fzf's `**<TAB>` fuzzy trigger. Whatever binds ^I last wins, so any new
-# Tab-binding tool (fzf-tab, etc.) has to be added above this block.
-#
-# The `projects` block below is the one exception: code-sync's install.sh always
-# appends it to the end of the file, so this block cannot be literally last on a
-# fully-installed machine. That is fine -- it binds Esc-s, never ^I. Nothing that
-# touches ^I may go below here.
-if (( ${+functions[_zsh_autosuggest_start]} )); then
-  _tab_orig_widget="${$(bindkey '^I')##* }"
-  [[ -z "$_tab_orig_widget" || "$_tab_orig_widget" == "undefined-key" ]] \
-    && _tab_orig_widget=expand-or-complete
-
-  _tab_accept_or_complete() {
-    # At a word boundary -- the line ends in a space -- the useful answer is the
-    # completion list for the NEXT word: `brew <TAB>` should offer brew's 194
-    # subcommands, not swallow a whole history line. Everywhere else, an
-    # on-screen suggestion is the thing Tab should accept.
-    if [[ -n "$POSTDISPLAY" ]] && (( CURSOR == ${#BUFFER} )) && [[ $BUFFER != *' ' ]]; then
-      zle autosuggest-accept
-    else
-      zle "$_tab_orig_widget"
-    fi
-  }
-  zle -N _tab_accept_or_complete
-  bindkey '^I' _tab_accept_or_complete
-fi
-# --- end Tab accepts the autosuggestion ---
-
 # --- inline history cycling, overflowing into atuin ---
 # Standard shell direction: ↑ goes older, ↓ goes newer. Both walk in place
 # through the history entries that start with whatever is already typed (or
