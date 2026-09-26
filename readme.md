@@ -88,13 +88,26 @@ Keys, once installed:
 
 | Key | Effect |
 |---|---|
-| `Tab` | open the fzf-tab completion menu (a single match is inserted directly). Never accepts the ghost text — history suggestions can be stale paths |
+| `Tab` | accept the ghost text when one is showing; otherwise open the fzf-tab completion menu (a single match is inserted directly) |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
 | `↓` / `↑` | walk forward / back through the other matches (below) |
 
 Acceptance only fires with the cursor at end of line; mid-line, `→` just moves
-the cursor as usual.
+the cursor as usual and `Tab` completes.
+
+### Suggestions that can't work are skipped
+
+History doesn't record where a command ran, so `cd foo` typed inside `~/Code`
+would otherwise be suggested again in `~`, where `foo` doesn't exist. `_hv_ok`
+rejects any `cd`/`pushd` whose target doesn't resolve from `$PWD` (or via
+`cdpath`) and the next-newest match is suggested instead; every other command
+passes untouched. The ghost-text strategy (`history_valid`) and the arrow-key
+cycling both use it, so they stay in step.
+
+`cdpath=(~/Code)` (set when `~/Code` exists) makes `cd <project>` work from any
+directory: a name that isn't under `$PWD` is looked up in `~/Code` next, and zsh
+prints where it landed.
 
 ### Cycling to the other matches
 
@@ -120,14 +133,17 @@ Two different questions, deliberately on two different keys:
 
 - **Arrows = history.** "What did I run before?" atuin plus zsh's `HISTFILE`.
   Neither knows what flags a command accepts — atuin is a history database.
-- **Tab = completions.** "What can this command do?" fzf-tab renders the
-  completion system's candidates, so `brew <TAB>` offers all 194 subcommands
-  with their descriptions, fuzzy-searchable.
+- **Tab = completions** (once no ghost text is showing). "What can this
+  command do?" fzf-tab renders the completion system's candidates, so
+  `brew <TAB>` offers all 194 subcommands with their descriptions,
+  fuzzy-searchable; `git checkout <TAB>` picks a branch, `kill <TAB>` a PID.
 
 The Tab chain resolves itself and is worth not disturbing. fzf-tab binds `^I`
 when it loads; `fzf --zsh` then rebinds `^I` to `fzf-completion` but first
 records the previous owner in `$fzf_default_completion`, so it delegates back
-to fzf-tab whenever the line has no `**` trigger. Both coexist:
+to fzf-tab whenever the line has no `**` trigger. Last, `_tab_accept_or_complete`
+takes `^I` itself: it accepts the ghost text if one is showing and otherwise
+calls `fzf-completion`. All three coexist:
 
 | You type | You get |
 |---|---|
@@ -139,9 +155,10 @@ Note that completion candidates come in the completion function's order, not by
 how often *you* use them — nothing off the shelf ranks by personal frequency.
 Type a few characters in the fzf picker instead of hunting alphabetically.
 
-Candidates come from **atuin**, not zsh's own history, so the cycle agrees with
-the grey ghost text instead of drawing on a second unsynced source. It falls
-back to `fc` when atuin isn't installed.
+Candidates come from **atuin first** (recent, synced across machines), then
+zsh's own `HISTFILE` appended after them, deduped. Both are needed: atuin's DB
+only goes back to when atuin was installed, while `HISTFILE` goes back years.
+Without atuin installed, the cycle is just `HISTFILE`.
 
 This is hand-rolled rather than `zsh-history-substring-search`, which has no
 concept of "out of matches" — and that boundary is the whole point of the
@@ -156,10 +173,11 @@ Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
 2. `fzf --zsh` must load **after** fzf-tab (it does: fzf-tab comes from
    `plugins=(…)`, fzf's keybindings are sourced later). It records the previous
    `^I` owner in `$fzf_default_completion` and delegates to it, so the order is
-   what keeps `**<TAB>` and the fzf-tab menu both working. Nothing else may
-   rebind `^I` — in particular Tab must never accept the autosuggestion: history
-   ghost text is not validated, so `cd m<TAB>` would happily insert a directory
-   that was renamed months ago (removed 2026-09-15 for exactly that reason).
+   what keeps `**<TAB>` and the fzf-tab menu both working. The only other `^I`
+   binding is `_tab_accept_or_complete`, which must come after both. (Tab-accept
+   was removed on 2026-09-15 because unvalidated history offered `cd` targets
+   that no longer existed, and restored on 2026-09-26 once `_hv_ok` filtered
+   those out.)
 
 `.zshrc` appends the two plugins only if their directories exist, so a machine
 that skipped component 5 still starts a clean shell — just without ghost text.
@@ -207,7 +225,7 @@ launchctl list | grep nicholassmith        # custom agents loaded?
 brew bundle check --file=Brewfile          # Brewfile satisfied?
 gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
-bindkey '^I'                               # Tab -> fzf-completion (over fzf-tab)?
+bindkey '^I'                               # Tab -> _tab_accept_or_complete?
 projects                                   # ~/Code sync status block
 tail -5 ~/Library/Logs/code-sync.launchd.log     # sync agent healthy?
 tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail

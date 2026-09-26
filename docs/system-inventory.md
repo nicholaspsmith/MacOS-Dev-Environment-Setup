@@ -63,7 +63,9 @@ survive rebuilds.
 - `~/Code/fzf-git.sh` clone (sourced by .zshrc)
 - Oh My Zsh custom plugins (git clones, not brew): `zsh-autosuggestions` +
   `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
-  falls through to `fzf-completion` otherwise — added 2026-08-17
+  falls through to `fzf-completion` otherwise — added 2026-08-17, removed
+  2026-09-15, restored 2026-09-26 with impossible-`cd` suggestions filtered
+  (`_hv_ok`) and `cdpath=(~/Code)`
 - Brewfile: curated core (see file); heavier stacks commented out
 - Claude Code via native installer; VS Code + `vscode/extensions.txt` (44 ext.)
 - git: identity, LFS, gh credential helper (after `gh auth login`)

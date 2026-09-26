@@ -32,7 +32,48 @@ unset _omz_plugin
 # Suggest from shell history, falling back to completions when history misses.
 # atuin, when installed, prepends its own strategy to this array at init time,
 # so suggestions come from the synced atuin DB first.
-ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_STRATEGY=(history_valid completion)
+
+# `cd <name>` finds projects from anywhere: a relative name that is not under
+# $PWD is looked up in ~/Code next (zsh prints where it landed).
+[[ -d ~/Code ]] && cdpath=(~/Code)
+
+# History remembers `cd foo` typed in ~/Code, then offers it back in ~ where
+# foo does not exist. _hv_ok rejects a `cd`/`pushd` whose target does not
+# resolve from here (cdpath included); anything else passes untouched. Shared
+# by the ghost-text strategy below and the ↑/↓ cycling (_hcyc_load), so the
+# first ↓ still lands on exactly the line shown as ghost text.
+_hv_ok() {
+  local -a w=( ${(z)1} )
+  [[ $w[1] == (cd|pushd) ]] || return 0
+  local d=${(Q)w[2]}
+  [[ -z $d || $d == (-|-*|\;|\&\&|\|\|) ]] && return 0
+  d=${d/#\~/$HOME}
+  [[ -d $d ]] && return 0
+  [[ $d == (/|./|../)* ]] && return 1
+  local p; for p in $cdpath; do [[ -d $p/$d ]] && return 0; done
+  return 1
+}
+
+# zsh-autosuggestions' own history strategy, minus suggestions _hv_ok rejects:
+# a rejected entry is excluded from the pattern and the next-newest one tried.
+_zsh_autosuggest_strategy_history_valid() {
+  emulate -L zsh
+  setopt EXTENDED_GLOB
+  local prefix="${1//(#m)[\\*?[\]<>()|^~#]/\\$MATCH}"
+  local base="$prefix*" pattern cand
+  [[ -n $ZSH_AUTOSUGGEST_HISTORY_IGNORE ]] && base="($base)~($ZSH_AUTOSUGGEST_HISTORY_IGNORE)"
+  local -a bad
+  local -i n
+  for (( n = 0; n < 20; n++ )); do
+    pattern=$base
+    (( $#bad )) && pattern="($base)~(${(j:|:)bad})"
+    cand="${history[(r)$pattern]}"
+    [[ -z $cand ]] && return
+    _hv_ok "$cand" && { typeset -g suggestion=$cand; return }
+    bad+=( ${(b)cand} )
+  done
+}
 
 # Homebrew zsh completions — must join fpath BEFORE oh-my-zsh runs compinit
 [[ -d /opt/homebrew/share/zsh/site-functions ]] && fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
@@ -221,8 +262,8 @@ fi
 #     but first records the previous owner in $fzf_default_completion -- so it
 #     falls back to fzf-tab whenever the line has no `**` trigger. Both survive:
 #     `brew <TAB>` gets the fzf-tab menu, `vim **<TAB>` gets fzf's path search.
-#   * The Tab widget at the end of this file then captures fzf-completion as
-#     its own fallback, so an accepted suggestion still wins over both.
+#   * The Tab widget near the end of this file then captures fzf-completion as
+#     its own fallback, so a showing suggestion still wins over both.
 # fzf-tab drives the menu itself, so zsh must not also draw one. oh-my-zsh sets
 # `menu select` at ':completion:*:*:*:*:*', which is MORE specific than
 # ':completion:*' and would win on zstyle's most-specific-match rule -- so the
@@ -309,6 +350,8 @@ _hcyc_load() {
   # (b) quotes glob characters so a stray [ or * in the line is not a pattern.
   # (u) dedupes keeping first occurrence, so atuin's recent hits stay on top.
   _hcyc_hits=( ${(u)${raw:#${(b)_hcyc_typed}}} )    # dedupe, drop the typed text
+  local c; raw=( $_hcyc_hits ); _hcyc_hits=()       # drop impossible `cd`s
+  for c in $raw; do _hv_ok "$c" && _hcyc_hits+=( $c ); done
   (( $#_hcyc_hits > _hcyc_limit )) && _hcyc_hits=( ${_hcyc_hits[1,_hcyc_limit]} )
   _hcyc_i=0
 }
@@ -362,6 +405,24 @@ zle -N _hcyc_down
 bindkey '^[[A' _hcyc_up   ; bindkey '^[OA' _hcyc_up
 bindkey '^[[B' _hcyc_down ; bindkey '^[OB' _hcyc_down
 # --- end inline history cycling ---
+
+# --- Tab: accept the suggestion, else complete ---
+# Tab takes the grey ghost text when one is showing (cursor at end of line);
+# with nothing suggested it falls through to fzf-completion, which hands off to
+# the fzf-tab picker -- that picker is for commands with real choices
+# (`git checkout <TAB>` branches, `brew <TAB>` subcommands, `kill <TAB>` PIDs).
+# Safe now that impossible `cd`s never become ghost text (_hv_ok, top of file).
+# Must stay below `fzf --zsh` and fzf-tab, which both bind ^I.
+_tab_accept_or_complete() {
+  if [[ -n $POSTDISPLAY && $CURSOR -eq $#BUFFER ]]; then
+    zle autosuggest-accept
+  else
+    zle fzf-completion
+  fi
+}
+zle -N _tab_accept_or_complete
+bindkey '^I' _tab_accept_or_complete
+# --- end Tab ---
 
 # --- projects (code-sync) ---
 # `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
