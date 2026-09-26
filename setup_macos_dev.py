@@ -680,6 +680,14 @@ class MacOSDevSetup:
                 legacy_plist.unlink()
                 print(f"🧹 Retired legacy {legacy_label} agent (superseded by {app_name})")
 
+        # Every push to a Menubarn app is a release. The pre-push hook that
+        # enforces it lives in each repo's local git config, so fresh clones
+        # have none until this re-arms it (StatusItemKit README, "Releases").
+        release_kit = code_dir / 'StatusItemKit' / 'scripts' / 'release' / 'adopt.sh'
+        if release_kit.exists():
+            self.run_command(f'bash "{release_kit}" --hooks-only', shell=True,
+                             capture_output=False, check=False)
+
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
             print("💡 Launch each app once and grant its permissions (KeyLight needs Accessibility);")
