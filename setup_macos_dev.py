@@ -1041,53 +1041,6 @@ class MacOSDevSetup:
             except EOFError:
                 print("\n\nNo input received. Using default (all components).")
                 return [(name, func) for name, _, func in steps]
-    
-    def setup_all(self):
-        """Legacy method for backwards compatibility"""
-        # This method is kept for backwards compatibility
-        # The main logic has been moved to main() function
-        selected_steps = self.display_checkbox_menu()
-        
-        if selected_steps is None:
-            print("\nSetup cancelled.")
-            return False
-        
-        if not selected_steps:
-            print("\nNo components selected for installation.")
-            return False
-        
-        # Display what will be installed
-        print("\n🚀 macOS Development Environment Setup")
-        print("="*50)
-        print("\nThe following components will be installed:")
-        for name, _ in selected_steps:
-            print(f"  • {name}")
-        
-        # Confirm with user
-        confirm = input("\nProceed with installation? (y/n): ").lower().strip()
-        if confirm not in ['y', 'yes']:
-            print("Setup cancelled.")
-            return False
-        
-        # Check compatibility
-        if not self.check_macos_compatibility():
-            return False
-        
-        print(f"\n🔧 Starting setup process...")
-        
-        # Run selected installation steps
-        for step_name, step_func in selected_steps:
-            print(f"\n🔄 Installing {step_name}...")
-            try:
-                step_func()
-            except Exception as e:
-                print(f"❌ Error in {step_name}: {e}")
-                self.add_failure(f"{step_name} (error: {e})")
-        
-        # Print summary
-        self.print_summary()
-        
-        return len(self.failed_items) == 0
 
 def main():
     parser = argparse.ArgumentParser(
