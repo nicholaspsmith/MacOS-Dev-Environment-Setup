@@ -17,6 +17,8 @@ import webbrowser
 import plistlib
 import curses
 import argparse
+import difflib
+import time
 from pathlib import Path
 
 # Personal repos that make up the menu-bar app suite. The apps depend on the
@@ -270,26 +272,97 @@ class MacOSDevSetup:
                 all_ok = False
         return all_ok
 
+    # code-sync's install.sh owns this marker-delimited region (and rewrites the
+    # path inside it), so it is never "machine-only" config.
+    ZSHRC_OWNED_BLOCK = ('# --- projects (code-sync) ---', '# --- end projects ---')
+
+    @classmethod
+    def _zshrc_lines(cls, text):
+        """Lines of a .zshrc, minus the region code-sync manages."""
+        out, skipping = [], False
+        for line in text.splitlines():
+            if line.strip() == cls.ZSHRC_OWNED_BLOCK[0]:
+                skipping = True
+            if not skipping:
+                out.append(line)
+            if line.strip() == cls.ZSHRC_OWNED_BLOCK[1]:
+                skipping = False
+        return out
+
+    @classmethod
+    def machine_only_hunks(cls, current, base, local_text=''):
+        """Blocks of `current` that are not in `base` (the shared file this
+        machine last installed, or the new one on a first install) and not
+        already carried in ~/.zshrc.local. Each is a list of lines."""
+        old, ref = cls._zshrc_lines(current), cls._zshrc_lines(base)
+        hunks = []
+        sm = difflib.SequenceMatcher(None, old, ref, autojunk=False)
+        for tag, i1, i2, _, _ in sm.get_opcodes():
+            if tag not in ('delete', 'replace'):
+                continue
+            hunk = old[i1:i2]
+            while hunk and not hunk[0].strip():
+                hunk.pop(0)
+            while hunk and not hunk[-1].strip():
+                hunk.pop()
+            if hunk and '\n'.join(hunk) not in local_text:
+                hunks.append(hunk)
+        return hunks
+
     def copy_zshrc(self):
-        """Copy .zshrc into place and clone fzf-git.sh, which it sources"""
+        """Install the shared .zshrc without losing what only this machine has.
+
+        ~/.zshrc is the repo's shared file, replaced on every run. Per-machine
+        lines belong in ~/.zshrc.local, which the shared file sources. Anything
+        found in the old ~/.zshrc that is neither in the shared file this
+        machine last installed nor already in .zshrc.local is queued in
+        ~/.zshrc.local.review for a human to move across -- never sourced
+        automatically, because a hunk of someone's old file can re-run things
+        the shared file deliberately orders (e.g. `fzf --zsh` rebinding Tab).
+        Then clones fzf-git.sh, which the shared file sources."""
+        home = Path.home()
         source_zshrc = Path(__file__).parent / 'zsh' / '.zshrc'
-        dest_zshrc = Path.home() / '.zshrc'
+        dest_zshrc = home / '.zshrc'
+        local_zshrc = home / '.zshrc.local'
+        review = home / '.zshrc.local.review'
+        # A copy of what we last installed: the baseline for "machine-only".
+        installed = home / '.local' / 'state' / 'macos-dev-setup' / 'zshrc.installed'
 
         try:
-            # Check if source file exists
             if not source_zshrc.exists():
                 self.add_failure(f".zshrc file not found at {source_zshrc}")
                 return False
+            shared = source_zshrc.read_text()
 
-            # Backup existing .zshrc if it exists
-            if dest_zshrc.exists():
-                backup_path = dest_zshrc.with_suffix('.zshrc.backup')
+            if dest_zshrc.exists() and dest_zshrc.read_text() != shared:
+                current = dest_zshrc.read_text()
+                stamp = time.strftime('%Y%m%d-%H%M%S')
+                backup_path = home / f'.zshrc.backup-{stamp}'
                 shutil.copy2(dest_zshrc, backup_path)
                 print(f"Backed up existing .zshrc to {backup_path}")
 
-            # Copy the new .zshrc
+                base = installed.read_text() if installed.exists() else shared
+                local_text = local_zshrc.read_text() if local_zshrc.exists() else ''
+                hunks = self.machine_only_hunks(current, base, local_text)
+                if hunks:
+                    with open(review, 'a') as f:
+                        f.write(f"# ---- {stamp}: in the old ~/.zshrc ({backup_path.name}) "
+                                "but not the shared one.\n"
+                                "# Move what this machine still needs into ~/.zshrc.local, "
+                                "then delete this file.\n\n")
+                        for hunk in hunks:
+                            f.write('\n'.join(hunk) + '\n\n')
+                    self.add_failure(f"{len(hunks)} machine-only .zshrc block(s) need review: {review}")
+
             shutil.copy2(source_zshrc, dest_zshrc)
-            self.add_success(f".zshrc copied to {dest_zshrc}")
+            installed.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_zshrc, installed)
+            if not local_zshrc.exists():
+                local_zshrc.write_text(
+                    "# Per-machine zsh config, sourced near the end of ~/.zshrc (the shared\n"
+                    "# file from MacOS-Dev-Environment-Setup, which setup overwrites).\n"
+                    "# Do not bind ^I (Tab) or re-run `fzf --zsh` here.\n")
+            self.add_success(f".zshrc copied to {dest_zshrc} (machine config: {local_zshrc})")
         except Exception as e:
             self.add_failure(f"Failed to copy .zshrc: {e}")
             return False

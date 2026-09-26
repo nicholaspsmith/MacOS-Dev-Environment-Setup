@@ -414,15 +414,25 @@ bindkey '^[[B' _hcyc_down ; bindkey '^[OB' _hcyc_down
 # Safe now that impossible `cd`s never become ghost text (_hv_ok, top of file).
 # Must stay below `fzf --zsh` and fzf-tab, which both bind ^I.
 _tab_accept_or_complete() {
-  if [[ -n $POSTDISPLAY && $CURSOR -eq $#BUFFER ]]; then
+  if [[ -n $POSTDISPLAY && $CURSOR -eq $#BUFFER ]] && (( $+widgets[autosuggest-accept] )); then
     zle autosuggest-accept
-  else
+  elif (( $+widgets[fzf-completion] )); then
     zle fzf-completion
+  else
+    zle expand-or-complete                          # no fzf on this machine
   fi
 }
 zle -N _tab_accept_or_complete
 bindkey '^I' _tab_accept_or_complete
 # --- end Tab ---
+
+# --- per-machine config ---
+# This file is shared and gets overwritten by setup (component 6). Lines only
+# this machine needs go in ~/.zshrc.local, sourced here so they can override
+# anything above. Setup parks anything else it finds in ~/.zshrc.local.review.
+# Do not bind ^I or re-run `fzf --zsh` there -- it would undo the Tab widget.
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+# --- end per-machine config ---
 
 # --- projects (code-sync) ---
 # `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
