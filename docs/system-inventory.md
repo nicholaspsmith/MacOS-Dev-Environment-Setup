@@ -22,12 +22,19 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | Media Tracking Killer.app | media-tracking-killer-menubar | added 2026-07-14; replaces killapplemediatracking.sh |
 | Download Recycler.app | download-recycler-menubar | added 2026-07-14; replaces download_recycler.sh; needs Downloads access (manual grant) |
 | Claude Usage.app | claude-usage-menubar | added 2026-08-25; Claude Code plan limits; prompts once for the Claude Code-credentials keychain item |
+| Barn.app | menubar-barn | the menu-bar manager (replaced Ice); needs Accessibility (manual grant) |
+| Apollo Monitor.app | apollo-monitor-menubar | |
+| Monitor Lizard.app | monitor-lizard-menubar | brightness keys for an external DDC monitor; needs Accessibility (manual grant) |
+| Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
 | (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
 
 Signing: `StatusItemKit/scripts/setup-signing.sh` creates the stable
 self-signed "StatusItemKit Local Signing" identity once, so TCC grants
-survive rebuilds.
+survive rebuilds. The suite step runs it interactively (skipped under
+`--no-confirm`), then runs `StatusItemKit/scripts/release/adopt.sh --hooks-only`
+to re-arm each app's pre-push release hook (it lives in per-repo git config, so
+fresh clones lack it).
 
 ## launchd agents
 
@@ -61,8 +68,8 @@ survive rebuilds.
   `python()`, git helpers, zoxide/atuin init, `newtools` banner; `proj`/`list`/
   `projects` now come from code-sync rather than being defined inline)
 - `~/Code/fzf-git.sh` clone (sourced by .zshrc)
-- Oh My Zsh custom plugins (git clones, not brew): `zsh-autosuggestions` +
-  `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
+- Oh My Zsh custom plugins (git clones, not brew): `fzf-tab`,
+  `zsh-autosuggestions` + `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
   falls through to `fzf-completion` otherwise — added 2026-08-17, removed
   2026-09-15, restored 2026-09-26 with impossible-`cd` suggestions filtered
   (`_hv_ok`) and `cdpath=(~/Code)`
@@ -72,7 +79,7 @@ survive rebuilds.
 
 ## Installed outside Homebrew on the audited machine (manual)
 
-- Mullvad VPN (direct download; Brewfile installs the cask on a new machine)
+- Mullvad VPN (direct download; component 16 installs the cask on a new machine)
 - iTerm2, VS Code, Raycast (direct downloads; casks cover them)
 - PostgreSQL 18 (EDB installer, `/Library/PostgreSQL/18`)
 - Rust (rustup), Bun, pnpm, Meteor — language installers, run on demand
@@ -85,8 +92,9 @@ survive rebuilds.
 - SwiftBar cask is installed but retired — plugins unsymlinked; Swift apps
   replaced it. Excluded from the Brewfile.
 - BetterTouchTool quarantined in `~/.disabled-apps` (replaced by KeyLight).
-- Ice (`jordanbaird-ice@beta`) hides the native Mullvad/Tailscale icons;
-  its layout is configured by hand.
+- Barn.app (menu-bar suite) hides the native Mullvad/Tailscale icons; its
+  layout is configured by hand. Ice was retired in its favour and its
+  `jordanbaird-ice@beta` cask removed from the Brewfile — never run both.
 - ThemeToggle (this repo's old dark/light toggle) was removed 2026-07-14 —
   macOS now has a light/dark toggle built into Control Center, and it wasn't
   installed on the audited machine anyway.

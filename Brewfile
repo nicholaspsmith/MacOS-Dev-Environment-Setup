@@ -53,7 +53,6 @@ brew "yarn"
 ## ── Casks: terminal, editor, menu-bar ecosystem ─────────────────────────
 cask "iterm2"
 cask "visual-studio-code"
-cask "jordanbaird-ice@beta"   # hides native Mullvad/Tailscale icons
 cask "rectangle"              # window manager (until HotkeyKit-based replacement)
 # Tailscale and Mullvad are deliberately NOT here — each is its own optional
 # component in setup_macos_dev.py so you choose per machine.

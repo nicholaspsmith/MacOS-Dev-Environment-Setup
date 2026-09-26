@@ -35,6 +35,10 @@ MENU_BAR_APP_REPOS = [
     ('media-tracking-killer-menubar', 'https://github.com/nicholaspsmith/media-tracking-killer-menubar.git', 'Media Tracking Killer.app'),
     ('download-recycler-menubar', 'https://github.com/nicholaspsmith/download-recycler-menubar.git', 'Download Recycler.app'),
     ('claude-usage-menubar', 'https://github.com/nicholaspsmith/claude-usage-menubar.git', 'Claude Usage.app'),
+    ('menubar-barn', 'https://github.com/nicholaspsmith/menubar-barn.git', 'Barn.app'),
+    ('apollo-monitor-menubar', 'https://github.com/nicholaspsmith/apollo-monitor-menubar.git', 'Apollo Monitor.app'),
+    ('monitor-lizard-menubar', 'https://github.com/nicholaspsmith/monitor-lizard-menubar.git', 'Monitor Lizard.app'),
+    ('home-assistant-menubar', 'https://github.com/nicholaspsmith/home-assistant-menubar.git', 'Homestead.app'),
 ]
 
 # launchd agents that older installs used for jobs the Swift apps now do
@@ -633,7 +637,8 @@ class MacOSDevSetup:
         signing_script = code_dir / 'StatusItemKit' / 'scripts' / 'setup-signing.sh'
         if self.no_confirm:
             print("⏭️  Skipping signing identity setup (needs your password). Builds use")
-            print(f"    ad-hoc signing; run {signing_script} later, then re-run this component.")
+            print(f"    ad-hoc signing; run {signing_script} later, then rebuild each app with")
+            print("    its scripts/build-app.sh (re-running this component skips unchanged builds).")
         elif signing_script.exists():
             result = self.run_command(f'bash "{signing_script}"', shell=True,
                                       capture_output=False, check=False)
@@ -690,7 +695,8 @@ class MacOSDevSetup:
 
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
-            print("💡 Launch each app once and grant its permissions (KeyLight needs Accessibility);")
+            print("💡 Launch each app once and grant its permissions (KeyLight, Barn and Monitor Lizard")
+            print("   need Accessibility; Homestead asks for a Home Assistant token);")
             print("   enable 'Start at Login' from each app's own menu (SMAppService).")
         if failed:
             self.add_failure(f"Menu-bar apps failed: {', '.join(failed)}")
@@ -848,9 +854,10 @@ class MacOSDevSetup:
         print("5. Run 'claude' in your project directory to start Claude Code")
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
-        print("• TCC permissions: Accessibility for KeyLight, Screen Recording for MacRecorder,")
-        print("  Downloads-folder access for Download Recycler — grant when each app first asks")
-        print("• Ice: arrange which menu-bar icons stay visible (hide native Mullvad/Tailscale)")
+        print("• TCC permissions: Accessibility for KeyLight, Barn and Monitor Lizard, Screen Recording")
+        print("  for MacRecorder, Downloads-folder access for Download Recycler — grant when each app")
+        print("  first asks; Homestead asks for a Home Assistant token")
+        print("• Barn: arrange which menu-bar icons stay visible (hide native Mullvad/Tailscale)")
         print("• SSH keys + ~/.ssh/config (e.g. the 'dino' host) — restore from backup")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
@@ -881,7 +888,7 @@ class MacOSDevSetup:
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
-            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, Media Tracking Killer, Download Recycler", self.install_menu_bar_apps),
+            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, Media Tracking Killer, Download Recycler, Claude Usage, Barn, Apollo Monitor, Monitor Lizard, Homestead", self.install_menu_bar_apps),
             ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
             ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
             ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),

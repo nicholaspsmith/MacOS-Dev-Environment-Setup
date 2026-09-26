@@ -41,7 +41,7 @@ on a machine that might not have Homebrew yet.)
 | # | Component | What it does |
 |---|---|---|
 | 1 | Homebrew | installs brew itself |
-| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, beads, …), casks (iTerm2, VS Code, Ice, Rectangle, Tailscale, Mullvad), nerd fonts |
+| 2 | Brew Bundle | installs the `Brewfile`: CLI tools (fd, ripgrep, fzf, zoxide, atuin, direnv, neovim, mosh, nvm, beads, …), casks (iTerm2, VS Code, Rectangle), nerd fonts. Tailscale and Mullvad are deliberately not in it — see 15 + 16 |
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
 | 5 | Zsh plugins | clones `fzf-tab`, `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
@@ -53,7 +53,7 @@ on a machine that might not have Homebrew yet.)
 | 11 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 12 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 13 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 14 | Menu-bar app suite | clones + builds **7 apps** into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar); retires the launchd agents the apps replaced |
+| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **12 apps** and symlinks them into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar), Claude Usage, Barn, Apollo Monitor, Monitor Lizard, Homestead; skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
@@ -64,6 +64,11 @@ full menu-bar apps inside component 14 — each with an on/off toggle, its own
 settings (kill interval / retention days), and Start at Login. The Dark Mode
 Toggle (macOS has this built into Control Center now) and MOV watcher
 components were removed.
+
+Together the apps are **Menubarn** (https://widgets.nicksmith.software). Every
+push to a Menubarn app is a release; the pre-push hook that enforces it lives
+in each repo's local git config, so fresh clones have none until component 14
+runs `StatusItemKit/scripts/release/adopt.sh --hooks-only` to re-arm it.
 
 Examples:
 
@@ -179,10 +184,10 @@ Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
    that no longer existed, and restored on 2026-09-26 once `_hv_ok` filtered
    those out.)
 
-`.zshrc` appends the two plugins only if their directories exist, so a machine
+`.zshrc` appends the three plugins only if their directories exist, so a machine
 that skipped component 5 still starts a clean shell — just without ghost text.
-Suggestions come from shell history, falling back to completions. (This repo
-does not install `atuin`, but if you add it yourself it prepends its own
+Suggestions come from shell history, falling back to completions. (`atuin`
+comes from the Brewfile, component 2; when present it prepends its own
 strategy to `ZSH_AUTOSUGGEST_STRATEGY` and its synced DB becomes the first
 source.) Cost is roughly +15 ms on shell startup, measured on the reference
 machine.
@@ -199,21 +204,30 @@ exec zsh
 gh auth login && gh auth setup-git
 
 # 3. Stable code-signing identity (asks for your macOS login password),
-#    then rebuild the menu-bar apps so TCC grants survive future rebuilds
+#    then rebuild the menu-bar apps with it so TCC grants survive future rebuilds.
+#    Component 14 skips repos that are unchanged and already built, so call
+#    each app's build script directly rather than re-running --select 14:
 ~/Code/StatusItemKit/scripts/setup-signing.sh
-cd ~/MacOS-Dev-Environment-Setup   # or wherever you cloned this repo
-python3 setup_macos_dev.py --select 14 --no-confirm
+for r in MacOS_Process_Monitor vpn-dns-menubar battery-time-menubar keylight-menubar \
+         MacRecorder media-tracking-killer-menubar download-recycler-menubar \
+         claude-usage-menubar menubar-barn apollo-monitor-menubar \
+         monitor-lizard-menubar home-assistant-menubar; do
+  bash ~/Code/$r/scripts/build-app.sh
+done
 ```
 
 Then do the things macOS won't let a script do:
 
 - Launch each menu-bar app once (`open ~/Applications`) and grant its
-  permission when asked: **Accessibility** for KeyLight, **Screen Recording**
-  for MacRecorder, **Downloads folder** for Download Recycler. Enable
-  **Start at Login** from each app's own menu.
+  permission when asked: **Accessibility** for KeyLight, Barn and Monitor
+  Lizard, **Screen Recording** for MacRecorder, **Downloads folder** for
+  Download Recycler; Homestead asks for a Home Assistant token. Enable
+  **Start at Login** from each app's own menu (SMAppService — no
+  LaunchAgents).
 - If you installed them: sign into **Tailscale** and **Mullvad VPN**, then
-  open **Ice** and hide their native menu-bar icons (VPN & DNS.app is the one
-  dot you keep).
+  use **Barn** (the menu-bar manager from component 14) to hide their native
+  menu-bar icons (VPN & DNS.app is the one icon you keep). Run only one
+  menu-bar manager: Ice is retired and no longer in the Brewfile.
 - iTerm2: the Quake profile is installed; assign its hotkey under
   **Settings ▸ Profiles ▸ Quake ▸ Keys** if it isn't active.
 - Restore SSH keys + `~/.ssh/config` from backup (e.g. the `dino` host).
