@@ -45,7 +45,7 @@ on a machine that might not have Homebrew yet.)
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
 | 5 | Zsh plugins | clones `fzf-tab`, `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
-| 6 | Copy .zshrc | installs `zsh/.zshrc` (backs up your old one to `~/.zshrc.backup`) and clones `fzf-git.sh` |
+| 6 | Copy .zshrc | installs the shared `zsh/.zshrc`, keeping per-machine lines in `~/.zshrc.local` (see [Per-machine config](#per-machine-config-zshrclocal)); clones `fzf-git.sh` |
 | 7 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
 | 8 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
 | 9 | Claude Code | native installer → `~/.local/bin/claude` (brew cask fallback) |
@@ -278,6 +278,33 @@ differences are deliberate:
   `~/.ssh/config`.
 - The retired fswatch catalog helpers are gone; `proj`/`list`/`projects` now
   come from code-sync (component 18).
+
+### Per-machine config: `~/.zshrc.local`
+
+`~/.zshrc` is the shared file and component 6 replaces it on every run, so
+re-running setup on any Mac is how shell changes reach it. Anything only one
+machine needs (an extra PATH entry, a LAN-aware `dino()` function) goes in
+`~/.zshrc.local`, which the shared file sources just before the code-sync
+block, so it can override anything above it. Don't bind `^I` or re-run
+`fzf --zsh` there: that would undo the Tab widget. A function named like one of
+the shared aliases needs `unalias <name> 2>/dev/null` before it.
+
+What component 6 does to an existing `~/.zshrc`:
+
+1. Backs it up to `~/.zshrc.backup-<timestamp>`, a new file on every run.
+2. Diffs it against the shared file this machine last installed (kept in
+   `~/.local/state/macos-dev-setup/zshrc.installed`; on the first run, the new
+   shared file), ignoring code-sync's marker block. Blocks found only in the old
+   file, and not already in `~/.zshrc.local`, are appended to
+   `~/.zshrc.local.review` and reported as an issue in the summary.
+3. Installs the shared file and creates a stub `~/.zshrc.local` if there isn't
+   one.
+
+The review file is **never sourced**. Diff hunks cut functions mid-body, and a
+stale block can re-run something the shared file orders on purpose. Move what
+the machine still needs into `~/.zshrc.local` by hand, then delete it. On a
+machine that has been on this scheme since its first run, the review only
+catches edits made directly to `~/.zshrc`.
 
 Two ordering constraints matter when re-running components:
 

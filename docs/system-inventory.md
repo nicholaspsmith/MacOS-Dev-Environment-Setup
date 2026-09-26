@@ -68,6 +68,8 @@ fresh clones lack it).
   `python()`, git helpers, zoxide/atuin init, `newtools` banner; `proj`/`list`/
   `projects` now come from code-sync rather than being defined inline)
 - `~/Code/fzf-git.sh` clone (sourced by .zshrc)
+- `~/.zshrc.local`: per-machine lines the shared `.zshrc` sources (component 6
+  keeps them and queues unknown ones in `~/.zshrc.local.review`), 2026-09-26
 - Oh My Zsh custom plugins (git clones, not brew): `fzf-tab`,
   `zsh-autosuggestions` + `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
   falls through to `fzf-completion` otherwise — added 2026-08-17, removed
