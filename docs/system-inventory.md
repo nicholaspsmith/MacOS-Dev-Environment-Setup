@@ -26,6 +26,7 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | Apollo Monitor.app | apollo-monitor-menubar | |
 | Monitor Lizard.app | monitor-lizard-menubar | brightness keys for an external DDC monitor; needs Accessibility (manual grant) |
 | Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
+| SoundChain.app | soundchain-menubar | Audio Unit effect chain over all system audio; asks for System Audio Recording |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
 | (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
 
