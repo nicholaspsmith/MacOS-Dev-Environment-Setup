@@ -45,7 +45,7 @@ on a machine that might not have Homebrew yet.)
 | 3 | ZSH Shell | ensures zsh is the default shell |
 | 4 | Oh My Zsh | installs oh-my-zsh |
 | 5 | Zsh plugins | clones `fzf-tab`, `zsh-autosuggestions` + `fast-syntax-highlighting` into `$ZSH_CUSTOM/plugins` (see [Inline autosuggestions](#inline-autosuggestions)) |
-| 6 | Copy .zshrc | installs the shared `zsh/.zshrc`, keeping per-machine lines in `~/.zshrc.local` (see [Per-machine config](#per-machine-config-zshrclocal)); clones `fzf-git.sh` |
+| 6 | Shared .zshrc config | links `~/.config/zsh/shared.zsh` → this repo's `zsh/shared.zsh` and adds one block to `~/.zshrc` that sources it; never overwrites your `~/.zshrc` (see [Shell config](#shell-config-zshsharedzsh)); clones `fzf-git.sh` |
 | 7 | NVM & Node LTS | Homebrew nvm + Node LTS (`nvm alias default lts/*`) |
 | 8 | iTerm2 Quake profile | installs the dropdown profile via DynamicProfiles |
 | 9 | Claude Code | native installer → `~/.local/bin/claude` (brew cask fallback) |
@@ -171,7 +171,7 @@ hand-off. The widget is defined after both plugins bind theirs, so it clears
 `POSTDISPLAY` and calls `_zsh_highlight` itself; without those two lines the
 ghost text and the syntax colors go stale as you cycle.
 
-Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
+Two ordering rules are load-bearing, both commented in `zsh/shared.zsh`:
 
 1. `fast-syntax-highlighting` must be the **last** entry in `plugins=(…)` — it
    wraps every ZLE widget defined before it.
@@ -184,7 +184,7 @@ Two ordering rules are load-bearing, both commented in `zsh/.zshrc`:
    that no longer existed, and restored on 2026-09-26 once `_hv_ok` filtered
    those out.)
 
-`.zshrc` appends the three plugins only if their directories exist, so a machine
+`shared.zsh` appends the three plugins only if their directories exist, so a machine
 that skipped component 5 still starts a clean shell — just without ghost text.
 Suggestions come from shell history, falling back to completions. (`atuin`
 comes from the Brewfile, component 2; when present it prepends its own
@@ -254,7 +254,7 @@ whole thing — everything is idempotent.
 bootstrap.sh            cold-start entry point (CLT + Homebrew + orchestrator)
 setup_macos_dev.py      component-based orchestrator
 Brewfile                curated package manifest (heavy stacks commented out)
-zsh/.zshrc              shell config (genericized from the live machine)
+zsh/shared.zsh          shared shell config, sourced from every Mac's ~/.zshrc
 iterm_profiles/         iTerm2 dynamic profile(s)
 vscode/extensions.txt   VS Code extension set
 local_bin/              scripts installed to ~/.local/bin (newtools cheat sheet)
@@ -264,58 +264,37 @@ docs/                   system inventory + design specs
 `docs/system-inventory.md` records the full audit of the reference machine —
 what's automated, what's deliberately manual, and why.
 
-### About `zsh/.zshrc`
+### Shell config: `zsh/shared.zsh`
 
-It is the shared file that each Mac installs as-is (component 6); what one
-machine alone needs lives in that machine's `~/.zshrc.local` (below). To change
-the shell everywhere, edit this file, commit, and re-run `--select 6` on each
-Mac. Editing `~/.zshrc` directly is lost on the next run. It is written to be
-generic:
+Every Mac's `~/.zshrc` starts with this block, which component 6 adds:
 
-- Absolute `/Users/<name>/…` paths become `$HOME`, and every optional tool is
-  guarded (`command -v fzf`, `[[ -f … ]]`) so the file starts cleanly on a
-  machine that has none of them.
-- Machine-local bits live in `~/.zshrc.local`, not here: private-app
-  launchers, LAN IPs, and Tailscale MagicDNS names have no business in a
-  public repo. The `dino` alias
-  survives because it's just an ssh host name you supply yourself in
-  `~/.ssh/config`.
-- The retired fswatch catalog helpers are gone; `proj`/`list`/`projects` now
-  come from code-sync (component 18).
+```zsh
+# --- MacOS-Dev-Environment-Setup: shared shell config ---
+# Lines below this block are this machine's own and override it.
+[[ -r ~/.config/zsh/shared.zsh ]] && source ~/.config/zsh/shared.zsh
+# --- end MacOS-Dev-Environment-Setup ---
+```
 
-### Per-machine config: `~/.zshrc.local`
+`~/.config/zsh/shared.zsh` is a symlink to `zsh/shared.zsh` in this checkout,
+so a `git pull` (code-sync does one hourly) updates the shell on every Mac. No
+need to re-run setup. `~/.zshrc` stays each machine's own file: its extra
+PATH entries, private-app launchers, LAN IPs and a LAN-aware `dino()` go below
+the block, and installers (bun, pnpm, code-sync) keep appending to it as
+usual. Don't bind `^I` or re-run `fzf --zsh` below the block, because that
+would undo the Tab widget. A function with the same name as a shared alias
+needs `unalias <name> 2>/dev/null` before it.
 
-`~/.zshrc` is the shared file and component 6 replaces it on every run, so
-re-running setup on any Mac is how shell changes reach it. Anything only one
-machine needs (an extra PATH entry, a LAN-aware `dino()` function) goes in
-`~/.zshrc.local`, which the shared file sources just before the code-sync
-block, so it can override anything above it. Don't bind `^I` or re-run
-`fzf --zsh` there: that would undo the Tab widget. A function named like one of
-the shared aliases needs `unalias <name> 2>/dev/null` before it.
+What component 6 does, based on what `~/.zshrc` holds:
 
-What component 6 does to an existing `~/.zshrc`:
+| Found | Result |
+|---|---|
+| the block already | only the symlink is refreshed |
+| nothing / a few lines | block prepended, the rest kept |
+| a file that loads oh-my-zsh itself | backed up to `~/.zshrc.backup-<timestamp>` and replaced by the block (oh-my-zsh would otherwise load twice); reported in the summary so you move that machine's own lines back |
+| a copy from the old copy-the-whole-file scheme | rebuilt as block + the former `~/.zshrc.local` + code-sync's block (backup kept, `.zshrc.local` renamed `.migrated`) |
 
-1. Backs it up to `~/.zshrc.backup-<timestamp>`, a new file on every run.
-2. Diffs it against the shared file this machine last installed (kept in
-   `~/.local/state/macos-dev-setup/zshrc.installed`; on the first run, the new
-   shared file), ignoring code-sync's marker block. Blocks found only in the old
-   file, and not already in `~/.zshrc.local`, are appended to
-   `~/.zshrc.local.review` and reported as an issue in the summary.
-3. Installs the shared file and creates a stub `~/.zshrc.local` if there isn't
-   one.
-
-The review file is **never sourced**. Diff hunks cut functions mid-body, and a
-stale block can re-run something the shared file orders on purpose. Move what
-the machine still needs into `~/.zshrc.local` by hand, then delete it. On a
-machine that has been on this scheme since its first run, the review only
-catches edits made directly to `~/.zshrc`.
-
-Two ordering constraints matter when re-running components:
-
-1. **Component 18 must run after component 6.** code-sync's `install.sh` edits
-   `~/.zshrc` in place; copying the repo's `.zshrc` over it afterwards would
-   discard that edit. The default order already does this.
-2. `install.sh` **appends** its `projects` block to the end of `~/.zshrc`.
-   `zsh/.zshrc` ships in that same order, so component 18 is a no-op on layout
-   rather than a reshuffle. That block binds Esc-s, never `^I`, so Tab is
-   unaffected.
+`shared.zsh` is written to be generic. Paths use `$HOME` and every optional
+tool is guarded (`command -v fzf`, `[[ -f … ]]`), so it starts cleanly on a
+machine that has none of them. `proj`/`list`/`projects` come from code-sync
+(component 18), whose `install.sh` appends its own marker block to
+`~/.zshrc`, below this one.

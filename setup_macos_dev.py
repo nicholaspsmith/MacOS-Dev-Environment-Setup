@@ -17,7 +17,7 @@ import webbrowser
 import plistlib
 import curses
 import argparse
-import difflib
+import re
 import time
 from pathlib import Path
 
@@ -272,99 +272,81 @@ class MacOSDevSetup:
                 all_ok = False
         return all_ok
 
-    # code-sync's install.sh owns this marker-delimited region (and rewrites the
-    # path inside it), so it is never "machine-only" config.
-    ZSHRC_OWNED_BLOCK = ('# --- projects (code-sync) ---', '# --- end projects ---')
+    ZSHRC_BLOCK = (
+        '# --- MacOS-Dev-Environment-Setup: shared shell config ---\n'
+        '# Lines below this block are this machine\'s own and override it.\n'
+        '[[ -r ~/.config/zsh/shared.zsh ]] && source ~/.config/zsh/shared.zsh\n'
+        '# --- end MacOS-Dev-Environment-Setup ---\n')
+    ZSHRC_MARK = '# --- MacOS-Dev-Environment-Setup: shared shell config ---'
+    PROJECTS_BLOCK_RE = r'# --- projects \(code-sync\) ---\n.*?# --- end projects ---\n'
 
-    @classmethod
-    def _zshrc_lines(cls, text):
-        """Lines of a .zshrc, minus the region code-sync manages."""
-        out, skipping = [], False
-        for line in text.splitlines():
-            if line.strip() == cls.ZSHRC_OWNED_BLOCK[0]:
-                skipping = True
-            if not skipping:
-                out.append(line)
-            if line.strip() == cls.ZSHRC_OWNED_BLOCK[1]:
-                skipping = False
-        return out
+    def shared_zsh_path(self):
+        return Path(__file__).resolve().parent / 'zsh' / 'shared.zsh'
 
-    @classmethod
-    def machine_only_hunks(cls, current, base, local_text=''):
-        """Blocks of `current` that are not in `base` (the shared file this
-        machine last installed, or the new one on a first install) and not
-        already carried in ~/.zshrc.local. Each is a list of lines."""
-        old, ref = cls._zshrc_lines(current), cls._zshrc_lines(base)
-        hunks = []
-        sm = difflib.SequenceMatcher(None, old, ref, autojunk=False)
-        for tag, i1, i2, _, _ in sm.get_opcodes():
-            if tag not in ('delete', 'replace'):
-                continue
-            hunk = old[i1:i2]
-            while hunk and not hunk[0].strip():
-                hunk.pop(0)
-            while hunk and not hunk[-1].strip():
-                hunk.pop()
-            if hunk and '\n'.join(hunk) not in local_text:
-                hunks.append(hunk)
-        return hunks
+    def shell_config_text(self):
+        """~/.zshrc plus the shared file it sources -- for "is X wired?" checks."""
+        text = self.shell_profile.read_text() if self.shell_profile.exists() else ''
+        shared = self.shared_zsh_path()
+        return text + (shared.read_text() if shared.exists() else '')
 
     def copy_zshrc(self):
-        """Install the shared .zshrc without losing what only this machine has.
+        """Wire ~/.zshrc to the shared config, never overwriting it.
 
-        ~/.zshrc is the repo's shared file, replaced on every run. Per-machine
-        lines belong in ~/.zshrc.local, which the shared file sources. Anything
-        found in the old ~/.zshrc that is neither in the shared file this
-        machine last installed nor already in .zshrc.local is queued in
-        ~/.zshrc.local.review for a human to move across -- never sourced
-        automatically, because a hunk of someone's old file can re-run things
-        the shared file deliberately orders (e.g. `fzf --zsh` rebinding Tab).
+        ~/.config/zsh/shared.zsh is a symlink to this repo's zsh/shared.zsh, so
+        pulling the repo updates the shell. ~/.zshrc stays the machine's own
+        file -- installers (bun, pnpm, code-sync) keep appending to it -- and
+        gets one marker block at the top that sources the shared file.
+          * block already present: only the symlink is refreshed
+          * old copy-the-whole-file scheme: rebuilt as block + ~/.zshrc.local +
+            code-sync's block (backup kept)
+          * a ~/.zshrc that loads oh-my-zsh itself would load it twice, so it
+            is backed up and replaced by the block; the summary says so
+          * anything else: the block is prepended, the rest kept as-is
         Then clones fzf-git.sh, which the shared file sources."""
         home = Path.home()
-        source_zshrc = Path(__file__).parent / 'zsh' / '.zshrc'
-        dest_zshrc = home / '.zshrc'
-        local_zshrc = home / '.zshrc.local'
-        review = home / '.zshrc.local.review'
-        # A copy of what we last installed: the baseline for "machine-only".
-        installed = home / '.local' / 'state' / 'macos-dev-setup' / 'zshrc.installed'
+        shared = self.shared_zsh_path()
+        link = home / '.config' / 'zsh' / 'shared.zsh'
+        rc = home / '.zshrc'
+        legacy_local = home / '.zshrc.local'
 
         try:
-            if not source_zshrc.exists():
-                self.add_failure(f".zshrc file not found at {source_zshrc}")
+            if not shared.exists():
+                self.add_failure(f"shared zsh config not found at {shared}")
                 return False
-            shared = source_zshrc.read_text()
+            link.parent.mkdir(parents=True, exist_ok=True)
+            if link.is_symlink() or link.exists():
+                link.unlink()
+            link.symlink_to(shared)
 
-            if dest_zshrc.exists() and dest_zshrc.read_text() != shared:
-                current = dest_zshrc.read_text()
+            text = rc.read_text() if rc.exists() else ''
+            if self.ZSHRC_MARK in text:
+                self.add_success(f"~/.zshrc already sources {link}")
+            else:
                 stamp = time.strftime('%Y%m%d-%H%M%S')
-                backup_path = home / f'.zshrc.backup-{stamp}'
-                shutil.copy2(dest_zshrc, backup_path)
-                print(f"Backed up existing .zshrc to {backup_path}")
-
-                base = installed.read_text() if installed.exists() else shared
-                local_text = local_zshrc.read_text() if local_zshrc.exists() else ''
-                hunks = self.machine_only_hunks(current, base, local_text)
-                if hunks:
-                    with open(review, 'a') as f:
-                        f.write(f"# ---- {stamp}: in the old ~/.zshrc ({backup_path.name}) "
-                                "but not the shared one.\n"
-                                "# Move what this machine still needs into ~/.zshrc.local, "
-                                "then delete this file.\n\n")
-                        for hunk in hunks:
-                            f.write('\n'.join(hunk) + '\n\n')
-                    self.add_failure(f"{len(hunks)} machine-only .zshrc block(s) need review: {review}")
-
-            shutil.copy2(source_zshrc, dest_zshrc)
-            installed.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_zshrc, installed)
-            if not local_zshrc.exists():
-                local_zshrc.write_text(
-                    "# Per-machine zsh config, sourced near the end of ~/.zshrc (the shared\n"
-                    "# file from MacOS-Dev-Environment-Setup, which setup overwrites).\n"
-                    "# Do not bind ^I (Tab) or re-run `fzf --zsh` here.\n")
-            self.add_success(f".zshrc copied to {dest_zshrc} (machine config: {local_zshrc})")
+                backup = home / f'.zshrc.backup-{stamp}'
+                if text:
+                    shutil.copy2(rc, backup)
+                    print(f"Backed up existing .zshrc to {backup}")
+                m = re.search(self.PROJECTS_BLOCK_RE, text, re.S)
+                projects = ('\n' + m.group(0)) if m else ''
+                if '# --- per-machine config ---' in text:
+                    local = legacy_local.read_text() if legacy_local.exists() else ''
+                    local = local.split('\n\n', 1)[1] if '\n\n' in local else ''
+                    rc.write_text(self.ZSHRC_BLOCK + '\n' + local.strip('\n') + '\n' + projects)
+                    if legacy_local.exists():
+                        legacy_local.rename(home / '.zshrc.local.migrated')
+                    self.add_success("~/.zshrc rebuilt: shared block + former ~/.zshrc.local")
+                elif 'oh-my-zsh.sh' in text:
+                    rc.write_text(self.ZSHRC_BLOCK + f'\n# Previous ~/.zshrc: {backup.name} -- it loaded\n'
+                                  '# oh-my-zsh itself; move only this machine\'s own lines here.\n'
+                                  + projects)
+                    self.add_failure(f"~/.zshrc replaced (it loaded oh-my-zsh itself); "
+                                     f"move machine-only lines back from {backup}")
+                else:
+                    rc.write_text(self.ZSHRC_BLOCK + ('\n' + text if text else ''))
+                    self.add_success("~/.zshrc now sources the shared config")
         except Exception as e:
-            self.add_failure(f"Failed to copy .zshrc: {e}")
+            self.add_failure(f"Failed to wire .zshrc: {e}")
             return False
 
         # .zshrc sources ~/Code/fzf-git.sh/fzf-git.sh (guarded, but clone it so it works)
@@ -401,8 +383,8 @@ class MacOSDevSetup:
         (Path.home() / '.nvm').mkdir(exist_ok=True)
 
         # The repo .zshrc lazy-loads brew's nvm. If the user kept their own
-        # profile (didn't run the Copy .zshrc component), wire nvm up there.
-        profile_text = self.shell_profile.read_text() if self.shell_profile.exists() else ''
+        # profile (didn't run the Shared .zshrc component), wire nvm up there.
+        profile_text = self.shell_config_text()
         if 'nvm.sh' not in profile_text and '_load_nvm' not in profile_text:
             self.add_to_shell_profile(
                 f'export NVM_DIR="$HOME/.nvm"\n[ -s "{brew_nvm_script}" ] && \\. "{brew_nvm_script}"')
@@ -556,8 +538,8 @@ class MacOSDevSetup:
 
         # Also guarantee it in the shell profile (~/.zshrc), so `code` keeps
         # working even if the symlink is ever removed. Idempotent: the same
-        # line ships in the repo's zsh/.zshrc, and add_to_shell_profile
-        # skips lines that are already present.
+        # line ships in the repo's zsh/shared.zsh, and add_to_shell_profile
+        # skips lines already in ~/.zshrc or the shared file.
         if self.add_to_shell_profile(f'export PATH="$PATH:{os.path.dirname(vscode_bin)}"'):
             wired.append(f"PATH in {self.shell_profile.name}")
 
@@ -580,6 +562,9 @@ class MacOSDevSetup:
                 with open(self.shell_profile, 'r') as f:
                     existing_content = f.read()
             
+            shared = self.shared_zsh_path()
+            if shared.exists():
+                existing_content += shared.read_text()
             if line not in existing_content:
                 with open(self.shell_profile, 'a') as f:
                     f.write(f'\n{line}\n')
@@ -843,8 +828,8 @@ class MacOSDevSetup:
         so there is no resident daemon. Its own install.sh owns the LaunchAgent
         and the marker-delimited .zshrc block, so this just clones and delegates.
 
-        Must run AFTER 'Copy .zshrc config' — install.sh edits ~/.zshrc, and
-        copying the repo's .zshrc afterwards would discard that edit."""
+        Runs after 'Shared .zshrc config' so its block lands below the shared
+        one; install.sh appends it to ~/.zshrc if it's missing."""
         print("⚙️ Installing code-sync (`projects` tool + ~/Code sync)...")
 
         code_dir = Path.home() / 'Code'
@@ -953,7 +938,7 @@ class MacOSDevSetup:
             ("ZSH Shell", "Z Shell (should already be default)", self.install_zsh),
             ("Oh My Zsh", "ZSH framework for terminal customization", self.install_oh_my_zsh),
             ("Zsh plugins", "fzf-tab, inline autosuggestions, syntax highlighting", self.install_zsh_plugins),
-            ("Copy .zshrc config", "Custom ZSH configuration + fzf-git.sh", self.copy_zshrc),
+            ("Shared .zshrc config", "Shared zsh config sourced from ~/.zshrc + fzf-git.sh", self.copy_zshrc),
             ("NVM & Node.js LTS", "Node Version Manager (Homebrew) and Node.js", self.install_nvm),
             ("iTerm2 Quake profile", "Hotkey dropdown profile via DynamicProfiles", self.install_iterm_profile),
             ("Claude Code", "Claude AI coding assistant (native installer)", self.install_claude_code),

@@ -63,13 +63,13 @@ fresh clones lack it).
 
 ## Shell / CLI (automated)
 
-- Oh My Zsh (robbyrussell theme) + `zsh/.zshrc` (genericized copy of the live
-  file: brew-nvm lazy-load, fzf init cache, direnv/zoxide hooks, venv-aware
+- Oh My Zsh (robbyrussell theme) + `zsh/shared.zsh` (sourced from each Mac's
+  `~/.zshrc` via the `~/.config/zsh/shared.zsh` symlink: brew-nvm lazy-load, fzf init cache, direnv/zoxide hooks, venv-aware
   `python()`, git helpers, zoxide/atuin init, `newtools` banner; `proj`/`list`/
   `projects` now come from code-sync rather than being defined inline)
 - `~/Code/fzf-git.sh` clone (sourced by .zshrc)
-- `~/.zshrc.local`: per-machine lines the shared `.zshrc` sources (component 6
-  keeps them and queues unknown ones in `~/.zshrc.local.review`), 2026-09-26
+- `~/.zshrc` itself is per-machine: component 6 only adds the block that
+  sources the shared file (2026-09-26); nothing else in it is managed
 - Oh My Zsh custom plugins (git clones, not brew): `fzf-tab`,
   `zsh-autosuggestions` + `fast-syntax-highlighting`, plus a Tab widget that accepts the suggestion and
   falls through to `fzf-completion` otherwise — added 2026-08-17, removed

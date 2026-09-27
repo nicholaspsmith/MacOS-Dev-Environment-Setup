@@ -1,3 +1,10 @@
+# Shared zsh config from MacOS-Dev-Environment-Setup (zsh/shared.zsh).
+# ~/.zshrc sources this through the symlink ~/.config/zsh/shared.zsh, which
+# setup component 6 creates -- so a `git pull` of the repo is all it takes to
+# update every Mac. Machine-only lines go in ~/.zshrc itself, BELOW the source
+# line, where they can override anything here. Don't bind ^I or re-run
+# `fzf --zsh` after it: that would undo the Tab widget at the end of this file.
+
 # OPENSPEC:START
 # OpenSpec shell completions configuration
 fpath=("$HOME/.oh-my-zsh/custom/completions" $fpath)
@@ -425,24 +432,3 @@ _tab_accept_or_complete() {
 zle -N _tab_accept_or_complete
 bindkey '^I' _tab_accept_or_complete
 # --- end Tab ---
-
-# --- per-machine config ---
-# This file is shared and gets overwritten by setup (component 6). Lines only
-# this machine needs go in ~/.zshrc.local, sourced here so they can override
-# anything above. Setup parks anything else it finds in ~/.zshrc.local.review.
-# Do not bind ^I or re-run `fzf --zsh` there -- it would undo the Tab widget.
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
-# --- end per-machine config ---
-
-# --- projects (code-sync) ---
-# `proj` (fuzzy-pick a ~/Code project and cd into it), `list`, `projects`, and
-# the status block printed when a shell lands on ~/Code. This replaced the old
-# fswatch-based PROJECTS.md catalog -- there is no resident daemon any more.
-#
-# Lives LAST because code-sync's install.sh rewrites this marker-delimited region
-# by stripping it and re-appending at end-of-file. Keeping it here means the
-# shipped file already matches what a fully-installed machine looks like, so
-# component 18 is a no-op on ordering instead of a reshuffle. install.sh also
-# rewrites the path below to an absolute one. Edit the helpers in code-sync.
-[[ -f "$HOME/Code/code-sync/shell/proj.sh" ]] && . "$HOME/Code/code-sync/shell/proj.sh"
-# --- end projects ---
