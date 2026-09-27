@@ -266,14 +266,18 @@ what's automated, what's deliberately manual, and why.
 
 ### About `zsh/.zshrc`
 
-It is a **genericized** copy of the live file, not a verbatim one, and the
-differences are deliberate:
+It is the shared file that each Mac installs as-is (component 6); what one
+machine alone needs lives in that machine's `~/.zshrc.local` (below). To change
+the shell everywhere, edit this file, commit, and re-run `--select 6` on each
+Mac. Editing `~/.zshrc` directly is lost on the next run. It is written to be
+generic:
 
 - Absolute `/Users/<name>/…` paths become `$HOME`, and every optional tool is
   guarded (`command -v fzf`, `[[ -f … ]]`) so the file starts cleanly on a
   machine that has none of them.
-- Machine-local bits are **omitted**: private-app launchers, LAN IPs, and
-  Tailscale MagicDNS names have no business in a public repo. The `dino` alias
+- Machine-local bits live in `~/.zshrc.local`, not here: private-app
+  launchers, LAN IPs, and Tailscale MagicDNS names have no business in a
+  public repo. The `dino` alias
   survives because it's just an ssh host name you supply yourself in
   `~/.ssh/config`.
 - The retired fswatch catalog helpers are gone; `proj`/`list`/`projects` now
