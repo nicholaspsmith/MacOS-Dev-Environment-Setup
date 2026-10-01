@@ -746,7 +746,7 @@ class MacOSDevSetup:
                     legacy_plist.unlink()
                     print(f"🧹 Retired legacy {legacy_label} agent (superseded by {app_name})")
 
-        # Every push to a Menubarn app is a release. The pre-push hook that
+        # Every push to a Menumon app is a release. The pre-push hook that
         # enforces it lives in each repo's local git config, so fresh clones
         # have none until this re-arms it (StatusItemKit README, "Releases").
         release_kit = code_dir / 'StatusItemKit' / 'scripts' / 'release' / 'adopt.sh'

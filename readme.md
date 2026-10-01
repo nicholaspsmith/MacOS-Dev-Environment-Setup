@@ -66,8 +66,8 @@ Login. The Dark Mode
 Toggle (macOS has this built into Control Center now) and MOV watcher
 components were removed.
 
-Together the apps are **Menubarn** (https://widgets.nicksmith.software). Every
-push to a Menubarn app is a release; the pre-push hook that enforces it lives
+Together the apps are **Menumon** (https://menumon.nicksmith.software). Every
+push to a Menumon app is a release; the pre-push hook that enforces it lives
 in each repo's local git config, so fresh clones have none until component 14
 runs `StatusItemKit/scripts/release/adopt.sh --hooks-only` to re-arm it.
 
