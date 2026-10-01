@@ -29,13 +29,11 @@ FRAMEWORK_REPOS = [
     ('HotkeyKit', 'https://github.com/nicholaspsmith/HotkeyKit.git'),
 ]
 MENU_BAR_APP_REPOS = [
-    ('MacOS_Process_Monitor', 'https://github.com/nicholaspsmith/MacOS_Process_Monitor.git', 'ProcessMonitor.app'),
+    ('mac-daddy-menubar', 'https://github.com/nicholaspsmith/mac-daddy-menubar.git', 'Mac Daddy.app'),
     ('vpn-dns-menubar', 'https://github.com/nicholaspsmith/vpn-dns-menubar.git', 'VPN & DNS.app'),
     ('battery-time-menubar', 'https://github.com/nicholaspsmith/battery-time-menubar.git', 'Battery Time.app'),
     ('keylight-menubar', 'https://github.com/nicholaspsmith/keylight-menubar.git', 'KeyLight.app'),
     ('MacRecorder', 'https://github.com/nicholaspsmith/MacRecorder.git', 'MacRecorder.app'),
-    ('media-tracking-killer-menubar', 'https://github.com/nicholaspsmith/media-tracking-killer-menubar.git', 'Media Tracking Killer.app'),
-    ('download-recycler-menubar', 'https://github.com/nicholaspsmith/download-recycler-menubar.git', 'Download Recycler.app'),
     ('claude-usage-menubar', 'https://github.com/nicholaspsmith/claude-usage-menubar.git', 'Claude Usage.app'),
     ('apollo-monitor-menubar', 'https://github.com/nicholaspsmith/apollo-monitor-menubar.git', 'Apollo Monitor.app'),
     ('monitor-lizard-menubar', 'https://github.com/nicholaspsmith/monitor-lizard-menubar.git', 'Monitor Lizard.app'),
@@ -52,8 +50,7 @@ if int((platform.mac_ver()[0] or '0').split('.')[0]) < 27:
 # in-process. The suite step retires an app's legacy agent after linking it.
 LEGACY_AGENT_LABELS = {
     'Battery Time.app': 'com.nicholassmith.battery-time-power-watch',
-    'Media Tracking Killer.app': 'com.user.killapplemediatracking',
-    'Download Recycler.app': 'com.user.downloadrecycler',
+    'Mac Daddy.app': ['com.user.killapplemediatracking', 'com.user.downloadrecycler', 'com.nicholassmith.godot-headless-reaper'],
 }
 
 GIT_USER_NAME = 'nicholaspsmith'
@@ -740,13 +737,14 @@ class MacOSDevSetup:
 
         # Retire launchd agents that the Swift apps now handle in-process
         # (matches each repo's documented uninstall of its predecessor).
-        for app_name, legacy_label in LEGACY_AGENT_LABELS.items():
-            legacy_plist = Path.home() / 'Library' / 'LaunchAgents' / f'{legacy_label}.plist'
-            if legacy_plist.exists() and any(a.startswith(app_name.removesuffix('.app')) for a in built):
-                self.run_command(f'launchctl bootout gui/{os.getuid()}/{legacy_label}',
-                                 shell=True, check=False)
-                legacy_plist.unlink()
-                print(f"🧹 Retired legacy {legacy_label} agent (superseded by {app_name})")
+        for app_name, labels in LEGACY_AGENT_LABELS.items():
+            for legacy_label in ([labels] if isinstance(labels, str) else labels):
+                legacy_plist = Path.home() / 'Library' / 'LaunchAgents' / f'{legacy_label}.plist'
+                if legacy_plist.exists() and any(a.startswith(app_name.removesuffix('.app')) for a in built):
+                    self.run_command(f'launchctl bootout gui/{os.getuid()}/{legacy_label}',
+                                     shell=True, check=False)
+                    legacy_plist.unlink()
+                    print(f"🧹 Retired legacy {legacy_label} agent (superseded by {app_name})")
 
         # Every push to a Menubarn app is a release. The pre-push hook that
         # enforces it lives in each repo's local git config, so fresh clones
@@ -919,7 +917,7 @@ class MacOSDevSetup:
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
         print("• TCC permissions: Accessibility for KeyLight and Monitor Lizard (and Barn before macOS 27), Screen Recording")
-        print("  for MacRecorder, Downloads-folder access for Download Recycler — grant when each app")
+        print("  for MacRecorder, Downloads-folder access for Mac Daddy — grant when each app")
         print("  first asks; Homestead asks for a Home Assistant token; SoundChain asks for")
         print("  System Audio Recording")
         print("• Hide the native Mullvad/Tailscale icons: System Settings ▸ Menu Bar (macOS 27+), Barn before 27")
@@ -953,7 +951,7 @@ class MacOSDevSetup:
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
-            ("Menu-bar app suite", "ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, Media Tracking Killer, Download Recycler, Claude Usage, Barn, Apollo Monitor, Monitor Lizard, Homestead, SoundChain", self.install_menu_bar_apps),
+            ("Menu-bar app suite", "Mac Daddy, VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Barn, Apollo Monitor, Monitor Lizard, Homestead, SoundChain", self.install_menu_bar_apps),
             ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
             ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
             ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),

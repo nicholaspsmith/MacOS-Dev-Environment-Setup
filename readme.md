@@ -53,15 +53,16 @@ on a machine that might not have Homebrew yet.)
 | 11 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 12 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 13 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **12 apps** (13 before macOS 27, with Barn) and symlinks them into `~/Applications`: ProcessMonitor, VPN & DNS, Battery Time, KeyLight, MacRecorder, [Media Tracking Killer](https://github.com/nicholaspsmith/media-tracking-killer-menubar), [Download Recycler](https://github.com/nicholaspsmith/download-recycler-menubar), Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
+| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **10 apps** (11 before macOS 27, with Barn) and symlinks them into `~/Applications`: [Mac Daddy](https://github.com/nicholaspsmith/mac-daddy-menubar), VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
 | 18 | code-sync (projects) | creates `~/Code` if missing; clones [code-sync](https://github.com/nicholaspsmith/code-sync) and runs its `install.sh` (`projects`/`proj`/`list`, hourly sync agent); retires the old catalog watcher and installs the `newtools` cheat sheet |
 
-The old media-tracking-killer and download-recycler background scripts are now
-full menu-bar apps inside component 14 — each with an on/off toggle, its own
-settings (kill interval / retention days), and Start at Login. The Dark Mode
+The old media-tracking-killer, download-recycler and process-monitor apps (and
+the godot-headless-reaper agent) are now one menu-bar app, Mac Daddy, inside
+component 14 — with an on/off toggle per duty, its own settings, and Start at
+Login. The Dark Mode
 Toggle (macOS has this built into Control Center now) and MOV watcher
 components were removed.
 
@@ -208,9 +209,8 @@ gh auth login && gh auth setup-git
 #    Component 14 skips repos that are unchanged and already built, so call
 #    each app's build script directly rather than re-running --select 14:
 ~/Code/StatusItemKit/scripts/setup-signing.sh
-for r in MacOS_Process_Monitor vpn-dns-menubar battery-time-menubar keylight-menubar \
-         MacRecorder media-tracking-killer-menubar download-recycler-menubar \
-         claude-usage-menubar apollo-monitor-menubar \
+for r in mac-daddy-menubar vpn-dns-menubar battery-time-menubar keylight-menubar \
+         MacRecorder claude-usage-menubar apollo-monitor-menubar \
          monitor-lizard-menubar home-assistant-menubar soundchain-menubar; do
   bash ~/Code/$r/scripts/build-app.sh
 done
@@ -221,7 +221,7 @@ Then do the things macOS won't let a script do:
 - Launch each menu-bar app once (`open ~/Applications`) and grant its
   permission when asked: **Accessibility** for KeyLight and Monitor
   Lizard (and Barn before macOS 27), **Screen Recording** for MacRecorder, **Downloads folder** for
-  Download Recycler; Homestead asks for a Home Assistant token; SoundChain
+  Mac Daddy; Homestead asks for a Home Assistant token; SoundChain
   asks for **System Audio Recording**. Enable
   **Start at Login** from each app's own menu (SMAppService — no
   LaunchAgents).
@@ -244,7 +244,6 @@ claude --version                           # Claude Code installed?
 bindkey '^I'                               # Tab -> _tab_accept_or_complete?
 projects                                   # ~/Code sync status block
 tail -5 ~/Library/Logs/code-sync.launchd.log     # sync agent healthy?
-tail -5 ~/Library/Logs/download-recycler.log    # recycler audit trail
 ```
 
 Repair anything by re-running its component (`--select N`), or re-run the
