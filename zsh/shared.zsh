@@ -85,12 +85,23 @@ _zsh_autosuggest_strategy_history_valid() {
 # Homebrew zsh completions — must join fpath BEFORE oh-my-zsh runs compinit
 [[ -d /opt/homebrew/share/zsh/site-functions ]] && fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
 
+# The machine's short name ("MacBook-Pro-M1" -> "M1"), for the tab title and
+# the SSH prompt tag below.
+typeset -g _host_short=${${HOST%%.*}#MacBook-Pro-}
 source $ZSH/oh-my-zsh.sh
+
+# Name the machine in the terminal tab: oh-my-zsh titles the tab with the
+# directory at the prompt and the command while one runs, both through
+# title(); prefix every one of them with the machine.
+if (( ${+functions[title]} )); then
+  functions[_omz_title]=$functions[title]
+  title() { _omz_title "$_host_short: $1" "$_host_short: ${2:-$1}"; }
+fi
 
 # Over SSH, put the machine in front of the prompt so a remote shell never
 # passes for a local one: "MacBook-Pro-M1" shows as a magenta [M1].
 if [[ -n $SSH_CONNECTION ]]; then
-  PROMPT="%F{magenta}%B[${${HOST%%.*}#MacBook-Pro-}]%b%f $PROMPT"
+  PROMPT="%F{magenta}%B[$_host_short]%b%f $PROMPT"
 fi
 
 # Shortcut to reload .zshrc
