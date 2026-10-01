@@ -371,6 +371,13 @@ _hcyc_put() {
   (( ${+functions[_zsh_highlight]} )) && _zsh_highlight
 }
 
+# Past the top of the list: atuin's search when atuin is loaded, otherwise
+# plain history so ↑ still works on a machine without it.
+_hcyc_overflow() {
+  if (( ${+widgets[atuin-up-search]} )); then zle atuin-up-search
+  else zle up-line-or-history; fi
+}
+
 _hcyc_up() {                                        # back up the list, then atuin
   [[ $BUFFER == *$'\n'* ]] && { zle up-line-or-history; return }
   # Not cycling: we are already sitting at candidate 1 (whatever the ghost text
@@ -378,7 +385,7 @@ _hcyc_up() {                                        # back up the list, then atu
   # typed text here, which is exactly what atuin should be seeded with.
   if [[ $BUFFER != "$_hcyc_shown" ]]; then
     _hcyc_shown=$'\0'
-    zle atuin-up-search
+    _hcyc_overflow
     return
   fi
   # Cycling, and back at the top of the list: restore the typed text so atuin
@@ -386,7 +393,7 @@ _hcyc_up() {                                        # back up the list, then atu
   if (( _hcyc_i <= 1 )); then
     _hcyc_put "$_hcyc_typed"
     _hcyc_shown=$'\0'
-    zle atuin-up-search
+    _hcyc_overflow
     return
   fi
   (( _hcyc_i-- ))
