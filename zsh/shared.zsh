@@ -87,6 +87,12 @@ _zsh_autosuggest_strategy_history_valid() {
 
 source $ZSH/oh-my-zsh.sh
 
+# Over SSH, put the machine in front of the prompt so a remote shell never
+# passes for a local one: "MacBook-Pro-M1" shows as a magenta [M1].
+if [[ -n $SSH_CONNECTION ]]; then
+  PROMPT="%F{magenta}%B[${${HOST%%.*}#MacBook-Pro-}]%b%f $PROMPT"
+fi
+
 # Shortcut to reload .zshrc
 alias zshrc='source ~/.zshrc'
 alias zshconfig='/opt/homebrew/bin/nvim ~/.zshrc'
