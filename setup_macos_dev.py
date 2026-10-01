@@ -37,12 +37,16 @@ MENU_BAR_APP_REPOS = [
     ('media-tracking-killer-menubar', 'https://github.com/nicholaspsmith/media-tracking-killer-menubar.git', 'Media Tracking Killer.app'),
     ('download-recycler-menubar', 'https://github.com/nicholaspsmith/download-recycler-menubar.git', 'Download Recycler.app'),
     ('claude-usage-menubar', 'https://github.com/nicholaspsmith/claude-usage-menubar.git', 'Claude Usage.app'),
-    ('menubar-barn', 'https://github.com/nicholaspsmith/menubar-barn.git', 'Barn.app'),
     ('apollo-monitor-menubar', 'https://github.com/nicholaspsmith/apollo-monitor-menubar.git', 'Apollo Monitor.app'),
     ('monitor-lizard-menubar', 'https://github.com/nicholaspsmith/monitor-lizard-menubar.git', 'Monitor Lizard.app'),
     ('home-assistant-menubar', 'https://github.com/nicholaspsmith/home-assistant-menubar.git', 'Homestead.app'),
     ('soundchain-menubar', 'https://github.com/nicholaspsmith/soundchain-menubar.git', 'SoundChain.app'),
 ]
+# Barn is sunset: macOS 27 lays the menu bar out itself (System Settings ▸
+# Menu Bar hides icons), and Barn fights it. Install it only before 27.
+if int((platform.mac_ver()[0] or '0').split('.')[0]) < 27:
+    MENU_BAR_APP_REPOS.append(
+        ('menubar-barn', 'https://github.com/nicholaspsmith/menubar-barn.git', 'Barn.app'))
 
 # launchd agents that older installs used for jobs the Swift apps now do
 # in-process. The suite step retires an app's legacy agent after linking it.
@@ -754,8 +758,8 @@ class MacOSDevSetup:
 
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
-            print("💡 Launch each app once and grant its permissions (KeyLight, Barn and Monitor Lizard")
-            print("   need Accessibility; Homestead asks for a Home Assistant token; SoundChain")
+            print("💡 Launch each app once and grant its permissions (KeyLight and Monitor Lizard,")
+            print("   plus Barn before macOS 27, need Accessibility; Homestead asks for a Home Assistant token; SoundChain")
             print("   asks for System Audio Recording);")
             print("   enable 'Start at Login' from each app's own menu (SMAppService).")
         if failed:
@@ -914,11 +918,11 @@ class MacOSDevSetup:
         print("5. Run 'claude' in your project directory to start Claude Code")
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
-        print("• TCC permissions: Accessibility for KeyLight, Barn and Monitor Lizard, Screen Recording")
+        print("• TCC permissions: Accessibility for KeyLight and Monitor Lizard (and Barn before macOS 27), Screen Recording")
         print("  for MacRecorder, Downloads-folder access for Download Recycler — grant when each app")
         print("  first asks; Homestead asks for a Home Assistant token; SoundChain asks for")
         print("  System Audio Recording")
-        print("• Barn: arrange which menu-bar icons stay visible (hide native Mullvad/Tailscale)")
+        print("• Hide the native Mullvad/Tailscale icons: System Settings ▸ Menu Bar (macOS 27+), Barn before 27")
         print("• SSH keys + ~/.ssh/config (e.g. the 'dino' host) — restore from backup")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")

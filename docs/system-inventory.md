@@ -22,7 +22,7 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | Media Tracking Killer.app | media-tracking-killer-menubar | added 2026-07-14; replaces killapplemediatracking.sh |
 | Download Recycler.app | download-recycler-menubar | added 2026-07-14; replaces download_recycler.sh; needs Downloads access (manual grant) |
 | Claude Usage.app | claude-usage-menubar | added 2026-08-25; Claude Code plan limits; prompts once for the Claude Code-credentials keychain item |
-| Barn.app | menubar-barn | the menu-bar manager (replaced Ice); needs Accessibility (manual grant) |
+| Barn.app | menubar-barn | sunset: the menu-bar manager before macOS 27 (replaced Ice); installed only before 27 |
 | Apollo Monitor.app | apollo-monitor-menubar | |
 | Monitor Lizard.app | monitor-lizard-menubar | brightness keys for an external DDC monitor; needs Accessibility (manual grant) |
 | Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
@@ -95,8 +95,8 @@ fresh clones lack it).
 - SwiftBar cask is installed but retired — plugins unsymlinked; Swift apps
   replaced it. Excluded from the Brewfile.
 - BetterTouchTool quarantined in `~/.disabled-apps` (replaced by KeyLight).
-- Barn.app (menu-bar suite) hides the native Mullvad/Tailscale icons; its
-  layout is configured by hand. Ice was retired in its favour and its
+- On macOS 27, System Settings ▸ Menu Bar hides the native Mullvad/Tailscale
+  icons; Barn.app did it before 27 and is now sunset. Ice was retired in its favour and its
   `jordanbaird-ice@beta` cask removed from the Brewfile — never run both.
 - ThemeToggle (this repo's old dark/light toggle) was removed 2026-07-14 —
   macOS now has a light/dark toggle built into Control Center, and it wasn't
