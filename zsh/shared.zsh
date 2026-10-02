@@ -343,9 +343,14 @@ command -v newtools >/dev/null && newtools
 #   ↑            step to the next older match -- repeat to keep digging
 #   ↑ past end   atuin's full-screen search takes over, pre-filtered with the
 #                text you typed rather than whichever candidate was on screen
-#   ↓            step back toward the newest match
-#   ↓ past that  restores the line you actually typed, verbatim
-#   ↓ not cycling  falls through to the normal down-line-or-history
+#   ↓            step to the next older match (the ghost text is the first)
+#   ↑            step back toward the newest, then to the line you typed,
+#                verbatim; ↑ once more hands it to atuin's full-screen search
+#   ↓ no matches falls through to the normal down-line-or-history
+#
+# A hand-typed line is never lost: the first ↑/↓ that leaves it also saves it
+# to zsh history and atuin (_hcyc_save), unless that exact line is already in
+# history -- so a mistyped or half-finished command can be ↑'d back and fixed.
 #
 # Hand-rolled rather than zsh-history-substring-search: that plugin has no
 # concept of "out of matches", which is precisely the hand-off this needs.
@@ -385,6 +390,23 @@ _hcyc_load() {
   _hcyc_i=0
 }
 
+# Save the line the user typed before ↑/↓ replaces it. Exact lines already in
+# history are skipped, which also keeps a bare prefix like `git` out of it.
+typeset -g _hcyc_saved=''
+_hcyc_save() {
+  emulate -L zsh -o extendedglob
+  local d=${${1##[[:space:]]##}%%[[:space:]]##}
+  [[ -n $d && $d != *$'\n'* && $d != "$_hcyc_saved" ]] || return 0
+  [[ -n ${history[(re)$d]} ]] && return 0
+  _hcyc_saved=$d
+  print -sr -- "$d"
+  if [[ -n $ATUIN_SESSION ]] && command -v atuin >/dev/null; then
+    local id=$(atuin history start -- "$d" 2>/dev/null)
+    [[ -n $id ]] && { atuin history end --exit 0 --duration 0 -- "$id" &>/dev/null &! }
+  fi
+  return 0
+}
+
 _hcyc_put() {
   BUFFER=$1; CURSOR=$#BUFFER; _hcyc_shown=$BUFFER
   # This widget is wrapped by neither plugin (both bind at load, we define after),
@@ -404,22 +426,23 @@ _hcyc_up() {                                        # back up the list, then atu
   [[ $BUFFER == *$'\n'* ]] && { zle up-line-or-history; return }
   # Not cycling: we are already sitting at candidate 1 (whatever the ghost text
   # is showing), so there is nothing above it but atuin. BUFFER is still the
-  # typed text here, which is exactly what atuin should be seeded with.
+  # typed text here, which is exactly what atuin should be seeded with (and
+  # what its Esc hands back).
   if [[ $BUFFER != "$_hcyc_shown" ]]; then
+    _hcyc_save "$BUFFER"
     _hcyc_shown=$'\0'
     _hcyc_overflow
     return
   fi
-  # Cycling, and back at the top of the list: restore the typed text so atuin
-  # is filtered by what was typed rather than by whichever candidate is showing.
-  if (( _hcyc_i <= 1 )); then
-    _hcyc_put "$_hcyc_typed"
+  # Cycling and back at the line that was typed: atuin, seeded with that text.
+  if (( _hcyc_i <= 0 )); then
     _hcyc_shown=$'\0'
     _hcyc_overflow
     return
   fi
   (( _hcyc_i-- ))
-  _hcyc_put "$_hcyc_hits[_hcyc_i]"
+  if (( _hcyc_i == 0 )); then _hcyc_put "$_hcyc_typed"
+  else _hcyc_put "$_hcyc_hits[_hcyc_i]"; fi
 }
 
 _hcyc_down() {                                      # deeper: the next suggestion
@@ -427,6 +450,7 @@ _hcyc_down() {                                      # deeper: the next suggestio
   if [[ $BUFFER != "$_hcyc_shown" ]]; then          # fresh line or hand-edited
     _hcyc_load
     (( $#_hcyc_hits )) || { zle down-line-or-history; return }
+    _hcyc_save "$BUFFER"
     # A ghost suggestion on screen already IS candidate 1, so the first press
     # should reveal candidate 2. With no ghost showing, start at 1 instead.
     [[ -n $POSTDISPLAY ]] && _hcyc_i=1 || _hcyc_i=0
@@ -461,3 +485,67 @@ _tab_accept_or_complete() {
 zle -N _tab_accept_or_complete
 bindkey '^I' _tab_accept_or_complete
 # --- end Tab ---
+
+# --- paste: undo terminal-width line wrapping ---
+# Claude Code (and other TUIs) wrap long lines themselves, so copying a command
+# off the screen brings hard newlines at the wrap points plus the indentation
+# of the block it was drawn in. Pasting that leaves a broken multi-line command
+# -- and the leading spaces keep it out of history (histignorespace, and atuin
+# skips space-prefixed commands too). This hook rewrites the pasted text:
+#
+#   - removes the indentation every line shares, and leading spaces entirely
+#     when pasting at the start of the line
+#   - joins a line to the next when the next one's first word would not have
+#     fit on it at this terminal's width -- i.e. the break is a wrap, not a
+#     line the author wrote. Where the words either side of the break add up
+#     to more than a full line, one token (a long URL) was cut in two, so
+#     those halves are joined with no space.
+#
+# Real multi-line pastes keep their newlines: short lines, lines ending in `\`,
+# blank lines, heredocs, and anything with a line wider than this terminal
+# (it was not wrapped here). Tune with PASTE_UNWRAP_SLACK (columns of right
+# margin the wrapping app leaves, default 10); PASTE_UNWRAP=0 turns it off.
+# Undo (^_) after a paste removes the whole paste.
+_paste_unwrap() {
+  emulate -L zsh -o extendedglob
+  [[ ${PASTE_UNWRAP:-1} == 1 ]] || return 0
+  [[ $PASTED == *$'\n'* || $PASTED == [[:space:]]* ]] || return 0
+  local -a in out
+  local l ind row
+  local -i i min=-1 maxrow=0 W=${COLUMNS:-80} slack=${PASTE_UNWRAP_SLACK:-10}
+  in=( "${(@f)${PASTED//$'\r'/}}" )
+  while (( $#in )) && [[ $in[-1] != *[^[:space:]]* ]]; do in[-1]=(); done
+  (( $#in )) || return 0
+  for l in "${in[@]}"; do
+    row=${l%%[[:space:]]##}
+    (( $#row > maxrow )) && maxrow=$#row
+    [[ $l == *[^[:space:]]* ]] || continue
+    ind=${l%%[^[:space:]]*}
+    (( min < 0 || $#ind < min )) && min=$#ind
+  done
+  local join=1
+  (( maxrow > W )) && join=0                        # not wrapped at this width
+  [[ $PASTED == *'<<'* ]] && join=0                 # heredoc: lines are lines
+  local cur=${in[1]:$min} next nw lw sep
+  [[ $LBUFFER == *[^[:space:]]* ]] && cur=${in[1]}  # mid-line: keep its spacing
+  for (( i = 2; i <= $#in; i++ )); do
+    next=${in[i]:$min}
+    row=${in[i-1]%%[[:space:]]##}                   # the row as drawn, indent included
+    nw=${${next##[[:space:]]##}%%[[:space:]]*}
+    lw=${row##*[[:space:]]}
+    if (( join )) && [[ -n $nw && $cur != *\\ ]] && (( $#row + 1 + $#nw > W - slack )); then
+      sep=' '
+      [[ ${in[i-1]} != *[[:space:]] ]] && (( $#lw + $#nw > W - slack - min )) && sep=''
+      cur="${cur%%[[:space:]]##}$sep${next##[[:space:]]##}"
+    else
+      out+=( "$cur" ); cur=$next
+    fi
+  done
+  out+=( "$cur" )
+  [[ $LBUFFER != *[^[:space:]]* ]] && out[1]=${out[1]##[[:space:]]##}
+  PASTED=${(F)out}
+}
+zstyle -a :bracketed-paste-magic paste-init _paste_hooks
+zstyle :bracketed-paste-magic paste-init ${_paste_hooks:#_paste_unwrap} _paste_unwrap
+unset _paste_hooks
+# --- end paste ---
