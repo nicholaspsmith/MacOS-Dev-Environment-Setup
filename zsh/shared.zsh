@@ -90,12 +90,17 @@ _zsh_autosuggest_strategy_history_valid() {
 typeset -g _host_short=${${HOST%%.*}#MacBook-Pro-}
 source $ZSH/oh-my-zsh.sh
 
-# Name the machine in the terminal tab: oh-my-zsh titles the tab with the
-# directory at the prompt and the command while one runs, both through
-# title(); prefix every one of them with the machine.
+# The terminal tab reads "<machine>: Shell", or "<machine>: Claude" while
+# Claude Code runs (iterm-claude-tab-color then swaps in the session's name
+# once it has one). oh-my-zsh calls title() with the directory at the prompt
+# and the command word while one runs; reduce both to those two labels.
 if (( ${+functions[title]} )); then
   functions[_omz_title]=$functions[title]
-  title() { _omz_title "$_host_short: $1" "$_host_short: ${2:-$1}"; }
+  title() {
+    local label=Shell
+    [[ $1 == (claude|claude-local|llm) ]] && label=Claude
+    _omz_title "$_host_short: $label" "$_host_short: $label"
+  }
 fi
 
 # Over SSH, put the machine in front of the prompt so a remote shell never
