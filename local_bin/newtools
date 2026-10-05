@@ -87,6 +87,19 @@ banner() {
       "$C" "llm chat"   "$R" "plain REPL — no agent harness" \
       "$C" "llm status" "$R" "model, context window, memory"
   fi
+
+  # The other MacBook. Only listed where its SSH alias exists, and never the
+  # Mac you're on. SSH and Screen Sharing between the two are locked to each
+  # other; Screen Sharing goes through an SSH tunnel (remote-access-lockdown).
+  self=$(scutil --get LocalHostName 2>/dev/null | tr '[:upper:]' '[:lower:]')
+  for peer in m1 m5; do
+    case "$self" in *-"$peer") continue ;; esac
+    grep -Eqi "^Host( .*)? $peer( |\$)" "$HOME/.ssh/config" 2>/dev/null || continue
+    printf "\n%sOther Mac%s %s(MacBook Pro %s; key-only, from this Mac only)%s\n" "$B" "$R" "$D" "$(printf %s "$peer" | tr '[:lower:]' '[:upper:]')" "$R"
+    printf "  %s%-12s%s %s\n" \
+      "$C" "ssh $peer"    "$R" "SSH into it" \
+      "$C" "screen-$peer" "$R" "Screen Sharing to it, through an SSH tunnel"
+  done
 }
 
 case "${1:-}" in
