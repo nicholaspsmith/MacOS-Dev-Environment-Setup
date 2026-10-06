@@ -113,6 +113,9 @@ fi
 alias zshrc='source ~/.zshrc'
 alias zshconfig='/opt/homebrew/bin/nvim ~/.zshrc'
 
+# Clera, the crypt's typo ghost: "clera" is how clear comes out at speed.
+alias clera='clear'
+
 # use nvim instead of vim
 alias vim='/opt/homebrew/bin/nvim'
 
