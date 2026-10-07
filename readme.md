@@ -53,7 +53,7 @@ on a machine that might not have Homebrew yet.)
 | 11 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 12 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 13 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **10 apps** (11 before macOS 27, with Barn) and symlinks them into `~/Applications`: [Mac Daddy](https://github.com/nicholaspsmith/mac-daddy-menubar), VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
+| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **12 apps** and symlinks them into `~/Applications`: [Mac Daddy](https://github.com/nicholaspsmith/mac-daddy-menubar), VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar), [Menu Crane](https://github.com/nicholaspsmith/menu-crane), [Panes](https://github.com/nicholaspsmith/panes-menubar); never sunset apps (Barn and the ones Mac Daddy absorbed); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
@@ -219,17 +219,16 @@ done
 Then do the things macOS won't let a script do:
 
 - Launch each menu-bar app once (`open ~/Applications`) and grant its
-  permission when asked: **Accessibility** for KeyLight and Monitor
-  Lizard (and Barn before macOS 27), **Screen Recording** for MacRecorder, **Downloads folder** for
+  permission when asked: **Accessibility** for KeyLight, Monitor
+  Lizard, Panes and Menu Crane (for ⌘↩), **Screen Recording** for MacRecorder, **Downloads folder** for
   Mac Daddy; Homestead asks for a Home Assistant token; SoundChain
   asks for **System Audio Recording**. Enable
   **Start at Login** from each app's own menu (SMAppService — no
   LaunchAgents).
 - If you installed them: sign into **Tailscale** and **Mullvad VPN**, then
   hide their native menu-bar icons in **System Settings ▸ Menu Bar** (VPN &
-  DNS.app is the one icon you keep). Barn, the old menu-bar manager, is sunset:
-  component 14 installs it only before macOS 27. Run only one
-  menu-bar manager: Ice is retired and no longer in the Brewfile.
+  DNS.app is the one icon you keep). Barn, the old menu-bar manager, is sunset
+  and no longer installed. Ice is retired and no longer in the Brewfile.
 - iTerm2: the Quake profile is installed; assign its hotkey under
   **Settings ▸ Profiles ▸ Quake ▸ Keys** if it isn't active.
 - Restore SSH keys + `~/.ssh/config` from backup (e.g. the `dino` host).

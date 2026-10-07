@@ -14,21 +14,20 @@ on the frameworks via local `../` SPM paths), then symlinked into
 
 | App | Repo | Notes |
 |---|---|---|
-| ProcessMonitor.app | MacOS_Process_Monitor | |
-| VPN & DNS.app | vpn-dns-menubar | one dot for Mullvad/Tailscale state |
+| Mac Daddy.app | mac-daddy-menubar | replaced Process Monitor, Media Tracking Killer, Download Recycler and the godot reaper (2026-10-01); needs Downloads access (manual grant) |
+| VPN & DNS.app | vpn-dns-menubar | Iguanamous: Mullvad/Tailscale/accept-dns state |
 | Battery Time.app | battery-time-menubar | |
 | KeyLight.app | keylight-menubar | needs Accessibility (manual grant) |
 | MacRecorder.app | MacRecorder | needs Screen Recording (manual grant) |
-| Media Tracking Killer.app | media-tracking-killer-menubar | added 2026-07-14; replaces killapplemediatracking.sh |
-| Download Recycler.app | download-recycler-menubar | added 2026-07-14; replaces download_recycler.sh; needs Downloads access (manual grant) |
 | Claude Usage.app | claude-usage-menubar | added 2026-08-25; Claude Code plan limits; prompts once for the Claude Code-credentials keychain item |
-| Barn.app | menubar-barn | sunset: the menu-bar manager before macOS 27 (replaced Ice); installed only before 27 |
-| Apollo Monitor.app | apollo-monitor-menubar | |
+| Apollo Monitor.app | apollo-monitor-menubar | Apollo monitor level on the volume keys; needs Accessibility |
 | Monitor Lizard.app | monitor-lizard-menubar | brightness keys for an external DDC monitor; needs Accessibility (manual grant) |
 | Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
 | SoundChain.app | soundchain-menubar | Audio Unit effect chain over all system audio; asks for System Audio Recording |
+| Menu Crane.app | menu-crane | ⌘Space launcher (replaced Raycast); Accessibility only for ⌘↩ → Spotlight |
+| Panes.app | panes-menubar | window manager on ⌘⌥ (tiling, grid, edge snapping); needs Accessibility |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
-| (framework) | HotkeyKit | CGEventTap engine used by KeyLight |
+| (framework) | HotkeyKit | CGEventTap engine used by KeyLight, Monitor Lizard, Apollo Monitor and Panes |
 
 Signing: `StatusItemKit/scripts/setup-signing.sh` creates the stable
 self-signed "StatusItemKit Local Signing" identity once, so TCC grants
@@ -96,7 +95,7 @@ fresh clones lack it).
   replaced it. Excluded from the Brewfile.
 - BetterTouchTool quarantined in `~/.disabled-apps` (replaced by KeyLight).
 - On macOS 27, System Settings ▸ Menu Bar hides the native Mullvad/Tailscale
-  icons; Barn.app did it before 27 and is now sunset. Ice was retired in its favour and its
+  icons; Barn.app did it before 27 and is sunset (no longer installed). Ice was retired and its
   `jordanbaird-ice@beta` cask removed from the Brewfile — never run both.
 - ThemeToggle (this repo's old dark/light toggle) was removed 2026-07-14 —
   macOS now has a light/dark toggle built into Control Center, and it wasn't

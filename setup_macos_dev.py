@@ -39,12 +39,12 @@ MENU_BAR_APP_REPOS = [
     ('monitor-lizard-menubar', 'https://github.com/nicholaspsmith/monitor-lizard-menubar.git', 'Monitor Lizard.app'),
     ('home-assistant-menubar', 'https://github.com/nicholaspsmith/home-assistant-menubar.git', 'Homestead.app'),
     ('soundchain-menubar', 'https://github.com/nicholaspsmith/soundchain-menubar.git', 'SoundChain.app'),
+    ('menu-crane', 'https://github.com/nicholaspsmith/menu-crane.git', 'Menu Crane.app'),
+    ('panes-menubar', 'https://github.com/nicholaspsmith/panes-menubar.git', 'Panes.app'),
 ]
-# Barn is sunset: macOS 27 lays the menu bar out itself (System Settings ▸
-# Menu Bar hides icons), and Barn fights it. Install it only before 27.
-if int((platform.mac_ver()[0] or '0').split('.')[0]) < 27:
-    MENU_BAR_APP_REPOS.append(
-        ('menubar-barn', 'https://github.com/nicholaspsmith/menubar-barn.git', 'Barn.app'))
+# Sunset apps (the site's Crypt) are never installed: Barn, the menu-bar
+# manager macOS 27 made redundant, and the apps Mac Daddy absorbed (Process
+# Monitor, Media Tracking Killer, Download Recycler).
 
 # launchd agents that older installs used for jobs the Swift apps now do
 # in-process. The suite step retires an app's legacy agent after linking it.
@@ -756,8 +756,8 @@ class MacOSDevSetup:
 
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
-            print("💡 Launch each app once and grant its permissions (KeyLight and Monitor Lizard,")
-            print("   plus Barn before macOS 27, need Accessibility; Homestead asks for a Home Assistant token; SoundChain")
+            print("💡 Launch each app once and grant its permissions (KeyLight, Monitor Lizard and Panes")
+            print("   need Accessibility, Menu Crane for ⌘↩; Homestead asks for a Home Assistant token; SoundChain")
             print("   asks for System Audio Recording);")
             print("   enable 'Start at Login' from each app's own menu (SMAppService).")
         if failed:
@@ -916,11 +916,11 @@ class MacOSDevSetup:
         print("5. Run 'claude' in your project directory to start Claude Code")
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
-        print("• TCC permissions: Accessibility for KeyLight and Monitor Lizard (and Barn before macOS 27), Screen Recording")
+        print("• TCC permissions: Accessibility for KeyLight, Monitor Lizard, Panes and Menu Crane, Screen Recording")
         print("  for MacRecorder, Downloads-folder access for Mac Daddy — grant when each app")
         print("  first asks; Homestead asks for a Home Assistant token; SoundChain asks for")
         print("  System Audio Recording")
-        print("• Hide the native Mullvad/Tailscale icons: System Settings ▸ Menu Bar (macOS 27+), Barn before 27")
+        print("• Hide the native Mullvad/Tailscale icons: System Settings ▸ Menu Bar")
         print("• SSH keys + ~/.ssh/config (e.g. the 'dino' host) — restore from backup")
         if not shutil.which('code'):
             print("• VS Code: If 'code' command not working, restart terminal or run:")
@@ -951,7 +951,7 @@ class MacOSDevSetup:
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
-            ("Menu-bar app suite", "Mac Daddy, VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Barn, Apollo Monitor, Monitor Lizard, Homestead, SoundChain", self.install_menu_bar_apps),
+            ("Menu-bar app suite", "Mac Daddy, VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, SoundChain, Menu Crane, Panes", self.install_menu_bar_apps),
             ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
             ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
             ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),
