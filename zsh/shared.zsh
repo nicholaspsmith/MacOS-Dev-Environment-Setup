@@ -3,7 +3,7 @@
 # setup component 6 creates -- so a `git pull` of the repo is all it takes to
 # update every Mac. Machine-only lines go in ~/.zshrc itself, BELOW the source
 # line, where they can override anything here. Don't bind ^I or re-run
-# `fzf --zsh` after it: that would undo the Tab widget at the end of this file.
+# `fzf --zsh` after it: Tab is fzf-completion, which hands off to fzf-tab.
 
 # OPENSPEC:START
 # OpenSpec shell completions configuration
@@ -37,8 +37,9 @@ done
 unset _omz_plugin
 
 # Suggest from shell history, falling back to completions when history misses.
-# atuin, when installed, prepends its own strategy to this array at init time,
-# so suggestions come from the synced atuin DB first.
+# atuin, when installed, prepends its own strategy to this array at init time
+# (swapped for atuin_valid below), so suggestions come from the synced atuin DB
+# first.
 ZSH_AUTOSUGGEST_STRATEGY=(history_valid completion)
 
 # `cd <name>` finds projects from anywhere: a relative name that is not under
@@ -294,8 +295,9 @@ fi
 #     but first records the previous owner in $fzf_default_completion -- so it
 #     falls back to fzf-tab whenever the line has no `**` trigger. Both survive:
 #     `brew <TAB>` gets the fzf-tab menu, `vim **<TAB>` gets fzf's path search.
-#   * The Tab widget near the end of this file then captures fzf-completion as
-#     its own fallback, so a showing suggestion still wins over both.
+#   * Tab never accepts the grey ghost text (→ / End / ^E do). It used to, and
+#     the ghost is a whole history line: `cd ~/Co<TAB>` took
+#     `cd ~/Code/home-assistant-menubar && gh pr create …` instead of ~/Code/.
 # fzf-tab drives the menu itself, so zsh must not also draw one. oh-my-zsh sets
 # `menu select` at ':completion:*:*:*:*:*', which is MORE specific than
 # ':completion:*' and would win on zstyle's most-specific-match rule -- so the
@@ -334,21 +336,38 @@ command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
 # autosuggestions.
 command -v atuin >/dev/null && eval "$(atuin init zsh)"
 
+# atuin's strategy suggests its newest prefix match unchecked, so a `cd` that
+# cannot work from here -- usually the one that just failed -- became the ghost
+# text. Same query, more candidates, newest first, through _hv_ok like
+# history_valid; when none pass, history_valid gets its turn.
+_zsh_autosuggest_strategy_atuin_valid() {
+  emulate -L zsh
+  local c
+  # atuin prints the newest N oldest-first; (Oa) flips. --print0 keeps
+  # multi-line commands whole.
+  for c in ${(Oa)${(0)"$(ATUIN_QUERY="$1" atuin search --cmd-only --author '$all-user' \
+                           --limit 20 --search-mode prefix --print0 2>/dev/null)"}}; do
+    _hv_ok "$c" && { typeset -g suggestion=$c; return }
+  done
+}
+(( ${ZSH_AUTOSUGGEST_STRATEGY[(I)atuin]} )) && \
+  ZSH_AUTOSUGGEST_STRATEGY[${ZSH_AUTOSUGGEST_STRATEGY[(i)atuin]}]=atuin_valid
+
 # Per-session cheat sheet for the toolkit; `newtools table` for the comparison.
 command -v newtools >/dev/null && newtools
 # --- end Modern CLI toolkit ---
 
 # --- inline history cycling, overflowing into atuin ---
-# Standard shell direction: ↑ goes older, ↓ goes newer. Both walk in place
-# through the history entries that start with whatever is already typed (or
-# through all of history, when the line is empty).
+# ↑ opens atuin's history list with this shell's previous command selected and
+# older history stacked above it: ↑ Enter reruns the previous command, ↑ ↑ Enter
+# the one before, and so on (enter_accept = true in atuin's config.toml runs the
+# pick rather than pasting it). Text already typed seeds atuin's search.
 #
-#   ↑            step to the next older match -- repeat to keep digging
-#   ↑ past end   atuin's full-screen search takes over, pre-filtered with the
-#                text you typed rather than whichever candidate was on screen
-#   ↓            step to the next older match (the ghost text is the first)
-#   ↑            step back toward the newest, then to the line you typed,
-#                verbatim; ↑ once more hands it to atuin's full-screen search
+#   ↑            atuin's list (filtered to session-preload, see _hcyc_overflow)
+#   ↓            walk in place through the other history entries that start
+#                with what is typed; the grey ghost text is the first of them
+#   ↑ after ↓    walk back toward the ghost text, then to the line you typed,
+#                verbatim; ↑ once more opens atuin, seeded with that line
 #   ↓ no matches falls through to the normal down-line-or-history
 #
 # A hand-typed line is never lost: the first ↑/↓ that leaves it also saves it
@@ -357,7 +376,7 @@ command -v newtools >/dev/null && newtools
 #
 # Hand-rolled rather than zsh-history-substring-search: that plugin has no
 # concept of "out of matches", which is precisely the hand-off this needs.
-# Candidates are atuin's recent/synced entries first, then zsh's much deeper
+# ↓'s candidates are atuin's recent/synced entries first, then zsh's much deeper
 # HISTFILE -- see _hcyc_load for why one cannot stand in for the other.
 
 typeset -g  _hcyc_typed=''      # what the user actually typed
@@ -418,11 +437,18 @@ _hcyc_put() {
   (( ${+functions[_zsh_highlight]} )) && _zsh_highlight
 }
 
-# Past the top of the list: atuin's search when atuin is loaded, otherwise
-# plain history so ↑ still works on a machine without it.
+# atuin's list when atuin is loaded, otherwise plain history so ↑ still works
+# on a machine without it. session-preload = this shell's commands plus all
+# history from before it started, so the entry selected on open is what ran
+# last HERE. atuin's default for ↑, global, opened on whatever another tab ran
+# last, so ↑ Enter reran someone else's command. Ctrl-R inside atuin switches
+# filter mode when you want the other tabs' recent commands too.
 _hcyc_overflow() {
-  if (( ${+widgets[atuin-up-search]} )); then zle atuin-up-search
-  else zle up-line-or-history; fi
+  if (( ${+widgets[atuin-up-search]} )); then
+    zle atuin-up-search -- --filter-mode=session-preload
+  else
+    zle up-line-or-history
+  fi
 }
 
 _hcyc_up() {                                        # back up the list, then atuin
@@ -463,31 +489,18 @@ _hcyc_down() {                                      # deeper: the next suggestio
   _hcyc_put "$_hcyc_hits[_hcyc_i]"
 }
 
+# Every prompt starts a new cycle, even when it opens with the text the last
+# one left on screen (an empty line ↑'d back to, then a command typed and run):
+# otherwise ↓ would continue the stale list and miss that command.
+_hcyc_reset() { _hcyc_shown=$'\0' }
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd _hcyc_reset
+
 zle -N _hcyc_up
 zle -N _hcyc_down
 bindkey '^[[A' _hcyc_up   ; bindkey '^[OA' _hcyc_up
 bindkey '^[[B' _hcyc_down ; bindkey '^[OB' _hcyc_down
 # --- end inline history cycling ---
-
-# --- Tab: accept the suggestion, else complete ---
-# Tab takes the grey ghost text when one is showing (cursor at end of line);
-# with nothing suggested it falls through to fzf-completion, which hands off to
-# the fzf-tab picker -- that picker is for commands with real choices
-# (`git checkout <TAB>` branches, `brew <TAB>` subcommands, `kill <TAB>` PIDs).
-# Safe now that impossible `cd`s never become ghost text (_hv_ok, top of file).
-# Must stay below `fzf --zsh` and fzf-tab, which both bind ^I.
-_tab_accept_or_complete() {
-  if [[ -n $POSTDISPLAY && $CURSOR -eq $#BUFFER ]] && (( $+widgets[autosuggest-accept] )); then
-    zle autosuggest-accept
-  elif (( $+widgets[fzf-completion] )); then
-    zle fzf-completion
-  else
-    zle expand-or-complete                          # no fzf on this machine
-  fi
-}
-zle -N _tab_accept_or_complete
-bindkey '^I' _tab_accept_or_complete
-# --- end Tab ---
 
 # --- paste: undo terminal-width line wrapping ---
 # Claude Code (and other TUIs) wrap long lines themselves, so copying a command

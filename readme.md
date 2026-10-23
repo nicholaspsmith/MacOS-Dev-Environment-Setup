@@ -94,13 +94,14 @@ Keys, once installed:
 
 | Key | Effect |
 |---|---|
-| `Tab` | accept the ghost text when one is showing; otherwise open the fzf-tab completion menu (a single match is inserted directly) |
+| `Tab` | open the fzf-tab completion menu (a single match is inserted directly); never accepts the ghost text |
 | `→` / `End` / `^E` | accept the whole suggestion |
 | `⌥F` | accept **one word** of it |
-| `↓` / `↑` | walk forward / back through the other matches (below) |
+| `↑` | atuin's history list, newest at the bottom: `↑` `Enter` reruns the last command, `↑` `↑` `Enter` the one before (below) |
+| `↓` | walk through the other matches for what you've typed (below) |
 
 Acceptance only fires with the cursor at end of line; mid-line, `→` just moves
-the cursor as usual and `Tab` completes.
+the cursor as usual.
 
 ### Suggestions that can't work are skipped
 
@@ -108,26 +109,38 @@ History doesn't record where a command ran, so `cd foo` typed inside `~/Code`
 would otherwise be suggested again in `~`, where `foo` doesn't exist. `_hv_ok`
 rejects any `cd`/`pushd` whose target doesn't resolve from `$PWD` (or via
 `cdpath`) and the next-newest match is suggested instead; every other command
-passes untouched. The ghost-text strategy (`history_valid`) and the arrow-key
-cycling both use it, so they stay in step.
+passes untouched. Both ghost-text strategies use it — `atuin_valid` (which
+replaces atuin's own strategy: that one suggested its newest match unchecked,
+so a `cd` that had just failed came straight back as ghost text) and
+`history_valid` — and so does the arrow-key cycling, so they stay in step.
 
 `cdpath=(~/Code)` (set when `~/Code` exists) makes `cd <project>` work from any
 directory: a name that isn't under `$PWD` is looked up in `~/Code` next, and zsh
 prints where it landed.
 
-### Cycling to the other matches
+### ↑: atuin's list, opened on your last command
 
-The suggestion is a single guess. `↑`/`↓` walk in place through the other
-history entries that start with what you've typed:
+`↑` opens **atuin's full-screen history list** with the previous command
+selected and older ones stacked above it. `↑` `Enter` reruns the previous
+command, `↑` `↑` `Enter` the one before, and so on. Enter runs the pick
+because atuin's `config.toml` sets `enter_accept = true` on both Macs.
 
-The grey ghost text is **candidate 1**. From there:
+The list is atuin's **`session-preload`** filter: this tab's commands plus all
+history from before the tab opened. With the default, `global`, the selected
+entry was whatever *another* tab (or the other Mac, through sync) ran last, so
+`↑` `Enter` reran someone else's command. `^R` inside atuin switches filter
+mode when you want those too; `^R` at the prompt opens atuin's search as usual.
+Text you've already typed seeds atuin's search; `Esc` hands it back.
+
+### ↓: cycling to the other matches
+
+The ghost text is a single guess. `↓` walks in place through the other history
+entries that start with what you've typed, and the ghost text is **candidate 1**:
 
 - `↓` reveals candidate 2, then 3, then 4 — one per press, digging deeper.
-- `↑` walks back up toward candidate 1.
-- `↑` **at candidate 1** — or before you've started cycling at all — opens
-  **atuin's full-screen search**, seeded with the text you typed rather than
-  whichever candidate happens to be on screen. `Esc` out of atuin and you're
-  back to your typed line.
+- `↑` walks back up toward candidate 1, then to the line you typed.
+- `↑` back at the typed line opens atuin, as above, seeded with that line
+  rather than whichever candidate happens to be on screen.
 - `↓` at the deepest candidate stays put. Depth is `_hcyc_limit` (default 50).
 - If no ghost is showing (nothing matched), the first `↓` starts at candidate 1
   instead of 2, so no option is skipped.
@@ -139,7 +152,7 @@ Two different questions, deliberately on two different keys:
 
 - **Arrows = history.** "What did I run before?" atuin plus zsh's `HISTFILE`.
   Neither knows what flags a command accepts — atuin is a history database.
-- **Tab = completions** (once no ghost text is showing). "What can this
+- **Tab = completions.** "What can this
   command do?" fzf-tab renders the completion system's candidates, so
   `brew <TAB>` offers all 194 subcommands with their descriptions,
   fuzzy-searchable; `git checkout <TAB>` picks a branch, `kill <TAB>` a PID.
@@ -147,24 +160,22 @@ Two different questions, deliberately on two different keys:
 The Tab chain resolves itself and is worth not disturbing. fzf-tab binds `^I`
 when it loads; `fzf --zsh` then rebinds `^I` to `fzf-completion` but first
 records the previous owner in `$fzf_default_completion`, so it delegates back
-to fzf-tab whenever the line has no `**` trigger. Last, `_tab_accept_or_complete`
-takes `^I` itself: it accepts the ghost text if one is showing and otherwise
-calls `fzf-completion`. All three coexist:
+to fzf-tab whenever the line has no `**` trigger. Both coexist:
 
 | You type | You get |
 |---|---|
 | `brew <TAB>` | fzf-tab menu of brew's subcommands |
 | `vim **<TAB>` | fzf's fuzzy path search |
-| `git chec<TAB>` (ghost showing) | the suggestion accepted |
+| `cd ~/Co<TAB>` (ghost showing) | `cd ~/Code/`; the ghost text is ignored (`→` takes it) |
 
 Note that completion candidates come in the completion function's order, not by
 how often *you* use them — nothing off the shelf ranks by personal frequency.
 Type a few characters in the fzf picker instead of hunting alphabetically.
 
-Candidates come from **atuin first** (recent, synced across machines), then
-zsh's own `HISTFILE` appended after them, deduped. Both are needed: atuin's DB
-only goes back to when atuin was installed, while `HISTFILE` goes back years.
-Without atuin installed, the cycle is just `HISTFILE`.
+`↓`'s candidates come from **atuin first** (recent, synced across machines),
+then zsh's own `HISTFILE` appended after them, deduped. Both are needed: atuin's
+DB only goes back to when atuin was installed, while `HISTFILE` goes back years.
+Without atuin installed, the cycle is just `HISTFILE`, and `↑` is plain history.
 
 This is hand-rolled rather than `zsh-history-substring-search`, which has no
 concept of "out of matches" — and that boundary is the whole point of the
@@ -179,18 +190,18 @@ Two ordering rules are load-bearing, both commented in `zsh/shared.zsh`:
 2. `fzf --zsh` must load **after** fzf-tab (it does: fzf-tab comes from
    `plugins=(…)`, fzf's keybindings are sourced later). It records the previous
    `^I` owner in `$fzf_default_completion` and delegates to it, so the order is
-   what keeps `**<TAB>` and the fzf-tab menu both working. The only other `^I`
-   binding is `_tab_accept_or_complete`, which must come after both. (Tab-accept
-   was removed on 2026-09-15 because unvalidated history offered `cd` targets
-   that no longer existed, and restored on 2026-09-26 once `_hv_ok` filtered
-   those out.)
+   what keeps `**<TAB>` and the fzf-tab menu both working. Nothing else may
+   bind `^I`. (Tab accepted the ghost text until 2026-09-15, and again from
+   09-26 to 10-22. It went for good because the ghost is a whole history line:
+   `cd ~/Co<TAB>` took `cd ~/Code/home-assistant-menubar && gh pr create …`
+   instead of completing `~/Code/`.)
 
 `shared.zsh` appends the three plugins only if their directories exist, so a machine
 that skipped component 5 still starts a clean shell — just without ghost text.
 Suggestions come from shell history, falling back to completions. (`atuin`
 comes from the Brewfile, component 2; when present it prepends its own
-strategy to `ZSH_AUTOSUGGEST_STRATEGY` and its synced DB becomes the first
-source.) Cost is roughly +15 ms on shell startup, measured on the reference
+strategy to `ZSH_AUTOSUGGEST_STRATEGY`, `shared.zsh` swaps that for the
+checked `atuin_valid`, and its synced DB becomes the first source.) Cost is roughly +15 ms on shell startup, measured on the reference
 machine.
 
 ## After install — run these
