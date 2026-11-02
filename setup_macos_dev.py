@@ -38,13 +38,13 @@ MENU_BAR_APP_REPOS = [
     ('apollo-monitor-menubar', 'https://github.com/nicholaspsmith/apollo-monitor-menubar.git', 'Apollo Monitor.app'),
     ('home-assistant-menubar', 'https://github.com/nicholaspsmith/home-assistant-menubar.git', 'Homestead.app'),
     ('soundchain-menubar', 'https://github.com/nicholaspsmith/soundchain-menubar.git', 'SoundChain.app'),
-    ('menu-crane', 'https://github.com/nicholaspsmith/menu-crane.git', 'Menu Crane.app'),
     ('panes-menubar', 'https://github.com/nicholaspsmith/panes-menubar.git', 'Panes.app'),
 ]
 # Sunset apps (the site's Crypt) are never installed: Barn, the menu-bar
 # manager macOS 27 made redundant, and the apps Mac Daddy absorbed (Process
-# Monitor, Media Tracking Killer, Download Recycler) and Monitor Lizard, which
-# Panes 1.0.0 absorbed.
+# Monitor, Media Tracking Killer, Download Recycler, and Menu Crane, which
+# Mac Daddy 1.17.0 absorbed as its launcher) and Monitor Lizard, which Panes
+# 1.0.0 absorbed.
 
 # launchd agents that older installs used for jobs the Swift apps now do
 # in-process. The suite step retires an app's legacy agent after linking it.
@@ -757,7 +757,7 @@ class MacOSDevSetup:
         if built:
             self.add_success(f"Menu-bar apps linked into ~/Applications: {', '.join(built)}")
             print("💡 Launch each app once and grant its permissions (KeyLight and Panes")
-            print("   need Accessibility, Menu Crane for ⌘↩; Homestead asks for a Home Assistant token; SoundChain")
+            print("   need Accessibility, Mac Daddy for its launcher's ⌘↩; Homestead asks for a Home Assistant token; SoundChain")
             print("   asks for System Audio Recording);")
             print("   enable 'Start at Login' from each app's own menu (SMAppService).")
         if failed:
@@ -916,7 +916,7 @@ class MacOSDevSetup:
         print("5. Run 'claude' in your project directory to start Claude Code")
 
         print("\n🔧 Manual Configuration Required (macOS won't let us automate these):")
-        print("• TCC permissions: Accessibility for KeyLight, Panes and Menu Crane, Screen Recording")
+        print("• TCC permissions: Accessibility for KeyLight, Panes and Mac Daddy (launcher ⌘↩), Screen Recording")
         print("  for MacRecorder, Downloads-folder access for Mac Daddy — grant when each app")
         print("  first asks; Homestead asks for a Home Assistant token; SoundChain asks for")
         print("  System Audio Recording")
@@ -951,7 +951,7 @@ class MacOSDevSetup:
             ("VS Code Extensions", "Extension set captured from this machine", self.configure_vscode_extensions),
             ("GitHub CLI & git config", "gh, git identity, git-lfs", self.install_github_cli),
             ("GitHub Authentication", "Sign in to GitHub CLI (interactive)", self.setup_github_cli),
-            ("Menu-bar app suite", "Mac Daddy, VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Homestead, SoundChain, Menu Crane, Panes", self.install_menu_bar_apps),
+            ("Menu-bar app suite", "Mac Daddy, VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Homestead, SoundChain, Panes", self.install_menu_bar_apps),
             ("Tailscale", "Tailscale Mac app (needed by VPN/DNS watcher)", self.install_tailscale),
             ("Mullvad VPN", "Mullvad VPN app (needed by VPN/DNS watcher)", self.install_mullvad),
             ("VPN/DNS watcher agent", "Tailscale accept-dns follows Mullvad state (needs both apps above)", self.install_vpn_dns_agent),
