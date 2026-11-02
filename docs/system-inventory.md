@@ -14,7 +14,7 @@ on the frameworks via local `../` SPM paths), then symlinked into
 
 | App | Repo | Notes |
 |---|---|---|
-| Mac Daddy.app | mac-daddy-menubar | replaced Process Monitor, Media Tracking Killer, Download Recycler and the godot reaper (2026-10-01); needs Downloads access (manual grant) |
+| Mac Daddy.app | mac-daddy-menubar | replaced Process Monitor, Media Tracking Killer, Download Recycler and the godot reaper (2026-10-01); needs Downloads access (manual grant); since 1.17.0 also the ⌘Space launcher that was Menu Crane (Accessibility only for ⌘↩ → Spotlight) |
 | VPN & DNS.app | vpn-dns-menubar | Iguanamous: Mullvad/Tailscale/accept-dns state |
 | Battery Time.app | battery-time-menubar | |
 | KeyLight.app | keylight-menubar | needs Accessibility (manual grant) |
@@ -23,7 +23,6 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | Apollo Monitor.app | apollo-monitor-menubar | Apollo monitor level on the volume keys; needs Accessibility |
 | Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
 | SoundChain.app | soundchain-menubar | Audio Unit effect chain over all system audio; asks for System Audio Recording |
-| Menu Crane.app | menu-crane | ⌘Space launcher (replaced Raycast); Accessibility only for ⌘↩ → Spotlight |
 | Panes.app | panes-menubar | window manager on ⌘⌥ (tiling, grid, edge snapping); needs Accessibility |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
 | (framework) | HotkeyKit | CGEventTap engine used by KeyLight, Apollo Monitor and Panes |
