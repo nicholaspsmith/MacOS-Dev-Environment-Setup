@@ -21,13 +21,12 @@ on the frameworks via local `../` SPM paths), then symlinked into
 | MacRecorder.app | MacRecorder | needs Screen Recording (manual grant) |
 | Claude Usage.app | claude-usage-menubar | added 2026-08-25; Claude Code plan limits; prompts once for the Claude Code-credentials keychain item |
 | Apollo Monitor.app | apollo-monitor-menubar | Apollo monitor level on the volume keys; needs Accessibility |
-| Monitor Lizard.app | monitor-lizard-menubar | brightness keys for an external DDC monitor; needs Accessibility (manual grant) |
 | Homestead.app | home-assistant-menubar | Home Assistant in the menu bar; asks for an HA token |
 | SoundChain.app | soundchain-menubar | Audio Unit effect chain over all system audio; asks for System Audio Recording |
 | Menu Crane.app | menu-crane | ⌘Space launcher (replaced Raycast); Accessibility only for ⌘↩ → Spotlight |
 | Panes.app | panes-menubar | window manager on ⌘⌥ (tiling, grid, edge snapping); needs Accessibility |
 | (framework) | StatusItemKit | shared menu-bar framework + `make-app.sh` + signing |
-| (framework) | HotkeyKit | CGEventTap engine used by KeyLight, Monitor Lizard, Apollo Monitor and Panes |
+| (framework) | HotkeyKit | CGEventTap engine used by KeyLight, Apollo Monitor and Panes |
 
 Signing: `StatusItemKit/scripts/setup-signing.sh` creates the stable
 self-signed "StatusItemKit Local Signing" identity once, so TCC grants

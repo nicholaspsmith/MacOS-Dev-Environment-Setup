@@ -53,7 +53,7 @@ on a machine that might not have Homebrew yet.)
 | 11 | VS Code Extensions | installs everything in `vscode/extensions.txt` |
 | 12 | GitHub CLI & git config | gh, git identity, git-lfs |
 | 13 | GitHub Authentication | interactive `gh auth login` (skipped under `--no-confirm`) |
-| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **12 apps** and symlinks them into `~/Applications`: [Mac Daddy](https://github.com/nicholaspsmith/mac-daddy-menubar), VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Monitor Lizard, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar), [Menu Crane](https://github.com/nicholaspsmith/menu-crane), [Panes](https://github.com/nicholaspsmith/panes-menubar); never sunset apps (Barn and the ones Mac Daddy absorbed); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
+| 14 | Menu-bar app suite | clones StatusItemKit + HotkeyKit, sets up the stable signing identity (skipped under `--no-confirm`), then clones + builds **11 apps** and symlinks them into `~/Applications`: [Mac Daddy](https://github.com/nicholaspsmith/mac-daddy-menubar), VPN & DNS, Battery Time, KeyLight, MacRecorder, Claude Usage, Apollo Monitor, Homestead, [SoundChain](https://github.com/nicholaspsmith/soundchain-menubar), [Menu Crane](https://github.com/nicholaspsmith/menu-crane), [Panes](https://github.com/nicholaspsmith/panes-menubar); never sunset apps (Barn and the ones Mac Daddy absorbed, plus Monitor Lizard, now part of Panes); skips the rebuild when a repo is unchanged and already built; retires the launchd agents the apps replaced; re-arms each app's release pre-push hook |
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
@@ -222,7 +222,7 @@ gh auth login && gh auth setup-git
 ~/Code/StatusItemKit/scripts/setup-signing.sh
 for r in mac-daddy-menubar vpn-dns-menubar battery-time-menubar keylight-menubar \
          MacRecorder claude-usage-menubar apollo-monitor-menubar \
-         monitor-lizard-menubar home-assistant-menubar soundchain-menubar; do
+         home-assistant-menubar soundchain-menubar panes-menubar menu-crane; do
   bash ~/Code/$r/scripts/build-app.sh
 done
 ```
