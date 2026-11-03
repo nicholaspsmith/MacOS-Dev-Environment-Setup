@@ -57,7 +57,7 @@ on a machine that might not have Homebrew yet.)
 | 15 | Tailscale | Tailscale Mac app — its own checkbox so you choose per machine |
 | 16 | Mullvad VPN | Mullvad VPN app — its own checkbox so you choose per machine |
 | 17 | VPN/DNS watcher agent | launchd agent: Tailscale `accept-dns` follows Mullvad state (needs 15 + 16) |
-| 18 | code-sync (projects) | creates `~/Code` if missing; clones [code-sync](https://github.com/nicholaspsmith/code-sync) and runs its `install.sh` (`projects`/`proj`/`list`, hourly sync agent); retires the old catalog watcher and installs the `newtools` cheat sheet |
+| 18 | code-sync (projects) | creates `~/Code` if missing; clones [parity](https://github.com/nicholaspsmith/parity) and runs code-sync's `code-sync/install.sh` (code-sync lives in parity's repo since 2026-11-03) (`projects`/`proj`/`list`, hourly sync agent); retires the old catalog watcher and installs the `newtools` cheat sheet |
 
 The old media-tracking-killer, download-recycler and process-monitor apps (and
 the godot-headless-reaper agent) are now one menu-bar app, Mac Daddy, inside
@@ -253,7 +253,7 @@ gh auth status                             # GitHub wired?
 claude --version                           # Claude Code installed?
 bindkey '^I'                               # Tab -> _tab_accept_or_complete?
 projects                                   # ~/Code sync status block
-tail -5 ~/Library/Logs/code-sync.launchd.log     # sync agent healthy?
+grep summary ~/Library/Logs/projects.log | tail -1  # sync agent healthy?
 ```
 
 Repair anything by re-running its component (`--select N`), or re-run the

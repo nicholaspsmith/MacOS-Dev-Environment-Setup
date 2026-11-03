@@ -836,18 +836,21 @@ class MacOSDevSetup:
         one; install.sh appends it to ~/.zshrc if it's missing."""
         print("⚙️ Installing code-sync (`projects` tool + ~/Code sync)...")
 
+        # code-sync lives in parity's repo, in code-sync/ (since 2026-11-03;
+        # the standalone code-sync repo is archived). Its install.sh retires
+        # an old ~/Code/code-sync checkout by itself.
         code_dir = Path.home() / 'Code'
-        repo_dir = code_dir / 'code-sync'
+        repo_dir = code_dir / 'parity'
         try:
             code_dir.mkdir(exist_ok=True)
             if not self.clone_or_update_repo(
-                    'https://github.com/nicholaspsmith/code-sync.git', repo_dir):
-                self.add_failure("code-sync clone failed (`projects` unavailable)")
+                    'https://github.com/nicholaspsmith/parity.git', repo_dir):
+                self.add_failure("parity clone failed (code-sync's `projects` unavailable)")
                 return False
 
-            installer = repo_dir / 'install.sh'
+            installer = repo_dir / 'code-sync' / 'install.sh'
             if not installer.exists():
-                self.add_failure("code-sync: install.sh missing from the clone")
+                self.add_failure("code-sync: code-sync/install.sh missing from the parity clone")
                 return False
             os.chmod(installer, 0o755)
             result = self.run_command(f'"{installer}"', shell=True,
