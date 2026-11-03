@@ -39,7 +39,7 @@ fresh clones lack it).
 | Label | Status | Source |
 |---|---|---|
 | com.nicholassmith.mullvad-tailscale-dns | **automated** | vpn-dns-menubar repo (DNS watcher) |
-| com.code-sync.agent | **automated** | code-sync's own `install.sh` (hourly + at login; ~/Code sync) |
+| com.code-sync.agent | **automated** | code-sync's own `install.sh`, in `~/Code/parity/code-sync/` (hourly + at login; ~/Code sync) |
 | com.nicholassmith.code-catalog | **retired by setup** | the fswatch PROJECTS.md watcher; superseded by code-sync, which schedules itself. The code-sync step boots it out and deletes its plist when it finds one |
 | com.nicholassmith.mov-watcher | removed | MOV→MP4 watcher component was dropped 2026-07-14 (never installed anywhere) |
 | com.nicholassmith.battery-time-power-watch | **retired by setup** | SwiftBar-era; superseded by the Swift app's in-process IOKit watcher (`main.swift`). The menu-bar suite component boots it out and deletes its plist when it finds one |
